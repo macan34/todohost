@@ -1,4 +1,873 @@
-<!DOCTYPE html>
+const icon = type === "success" ? "✅" : type === "error" ? "❌" : "⚠️";
+      notification.innerHTML = `
+        <span class="notification-icon">${icon}</span>
+        <span>${message}</span>
+        <button onclick="this.parentElement.remove()" style="background: none; border: none; color: inherit; font-size: 1.2rem; padding: 0; margin-left: 0.5rem; cursor: pointer;">✕</button>
+      `;
+      
+      container.appendChild(notification);
+      
+      setTimeout(() => {
+        if (notification.parentElement) {
+          notification.remove();
+        }
+      }, 3000);
+    }
+
+    // Member management
+    function updateMemberList() {
+      const memberListContainer = document.getElementById("memberList");
+      if (!memberListContainer) return;
+      
+      memberListContainer.innerHTML = "";
+      
+      window.roomMembers.forEach((memberInfo, memberName) => {
+        const chip = document.createElement("div");
+        chip.className = `member-chip ${memberInfo.role}`;
+        chip.innerHTML = `
+          <div class="status-dot ${memberInfo.status}"></div>
+          <span>${memberInfo.role === "mentor" ? "👑" : "👤"} ${memberName}</span>
+        `;
+        memberListContainer.appendChild(chip);
+      });
+      
+      updateAssigneeOptions();
+    }
+
+    function updateAssigneeOptions() {
+      const assigneeSelect = document.getElementById("todoAssignee");
+      if (!assigneeSelect) return;
+      
+      const currentValue = assigneeSelect.value;
+      
+      assigneeSelect.innerHTML = `
+        <option value="">👥 Tugaskan ke Semua Anggota</option>
+        <option value="unassigned">⚪ Biarkan Tidak Ditugaskan</option>
+      `;
+      
+      window.roomMembers.forEach((memberInfo, memberName) => {
+        if (memberInfo.status === "online" && memberInfo.role === "member") {
+          const option = document.createElement("option");
+          option.value = memberName;
+          option.textContent = `👤 ${memberName}`;
+          assigneeSelect.appendChild(option);
+        }
+      });
+      
+      if (currentValue) {
+        assigneeSelect.value = currentValue;
+      }
+      
+      updateAssigneeFilter();
+    }
+
+    function updateAssigneeFilter() {
+      const filterSelect = document.getElementById("assigneeFilter");
+      if (!filterSelect) return;
+      
+      const currentValue = filterSelect.value;
+      
+      filterSelect.innerHTML = `
+        <option value="all">Semua Penugasan</option>
+        <option value="assigned-to-me">Ditugaskan ke Saya</option>
+        <option value="unassigned">Belum Ditugaskan</option>
+      `;
+      
+      window.roomMembers.forEach((memberInfo, memberName) => {
+        const option = document.createElement("option");
+        option.value = memberName;
+        option.textContent = `${memberInfo.role === "mentor" ? "👑" : "👤"} ${memberName}`;
+        filterSelect.appendChild(option);
+      });
+      
+      if (currentValue) {
+        filterSelect.value = currentValue;
+      }
+    }
+
+    // Room management
+    function autoCreateRoom() {
+      window.peer = new Peer(window.roomId);
+      window.peer.on("open", id => {
+        initApp("🏠 Room ID: " + id, "🎯 Mentor: " + window.userName);
+        document.getElementById("status").className = "status online";
+        document.getElementById("status").textContent = "Online";
+        
+        window.roomMembers.set(window.userName, { status: "online", role: "mentor" });
+        updateMemberList();
+        playSound();
+        showNotification("Room berhasil dibuat!", "success");
+
+        window.peer.on("connection", c => {
+          window.connections.push(c);
+          c.on("data", data => {
+            if (data.type === "requestData") {
+              c.send({ type: "allTodos", todos: getAllTodos() });
+              c.send({ type: "membersList", members: Array.from(window.roomMembers.entries()) });
+            } else if (data.type === "memberJoined") {
+              window.roomMembers.set(data.userName, { status: "online", role: "member" });
+              updateMemberList();
+              broadcast({ type: "memberJoined", userName: data.userName });
+              playSound();
+              showNotification(`${data.userName} bergabung ke room`, "success");
+            } else {
+              handleData(data);
+              broadcastToOthers(data, c);
+            }
+          });
+          
+          c.on("close", () => {
+            window.connections = window.connections.filter(conn => conn !== c);
+          });
+        });
+      });
+    }
+
+    function autoJoinRoom() {
+      window.peer = new Peer();
+      window.peer.on("open", () => {
+        window.conn = window.peer.connect(window.roomId);
+        window.conn.on("open", () => {
+          initApp("🏠 Room ID: " + window.roomId, "🤝 Anggota: " + window.userName);
+          document.getElementById("status").className = "status online";
+          document.getElementById("status").textContent = "Online";
+          window.conn.send({ type: "requestData" });
+          window.conn.send({ type: "memberJoined", userName: window.userName });
+          window.conn.on("data", handleData);
+          playSound();
+          showNotification("Berhasil terhubung ke room!", "success");
+        });
+        
+        window.conn.on("error", () => {
+          showNotification("Gagal terhubung ke room. Periksa Room ID.", "error");
+        });
+      });
+    }
+
+    function initApp(title, info) {
+      document.getElementById("authSection").classList.add("hidden");
+      document.getElementById("app").classList.remove("hidden");
+      document.getElementById("roomTitle").innerText = title;
+      document.getElementById("userRole").innerText = info;
+      
+      document.getElementById("addTodoForm").classList.add("hidden");
+      document.getElementById("memberInfo").classList.add("hidden");
+      
+      if (window.role === "mentor") {
+        document.getElementById("addTodoForm").classList.remove("hidden");
+      } else if (window.role === "member") {
+        document.getElementById("memberInfo").classList.remove("hidden");
+      }
+      
+      updateEmptyState();
+      updateDashboard();
+      updateSectionCounts();
+    }
+
+    // Task management with deadlines
+    function addTodo() {
+      if (window.role !== "mentor") {
+        showNotification("Hanya mentor yang dapat menambah tugas!", "error");
+        return;
+      }
+      
+      const title = document.getElementById("todoTitle").value.trim();
+      const desc = document.getElementById("todoDesc").value.trim();
+      const priority = document.getElementById("todoPriority").value;
+      const assignee = document.getElementById("todoAssignee").value;
+      const dueDate = document.getElementById("todoDueDate").value;
+      
+      if (!title) {
+        showNotification("Judul tidak boleh kosong", "error");
+        return;
+      }
+      
+      const todo = { 
+        type: "todo", 
+        id: Date.now(), 
+        title, 
+        desc, 
+        priority,
+        assignedTo: assignee === "unassigned" ? null : assignee || "all",
+        dueDate: dueDate || null,
+        user: window.userName, 
+        comments: [],
+        completed: false,
+        completedBy: [],
+        completedAt: null,
+        memberChecks: {},
+        createdAt: Date.now()
+      };
+      
+      renderTodo(todo);
+      saveTodos();
+      broadcast(todo);
+      
+      if (assignee && assignee !== "unassigned" && assignee !== "") {
+        if (assignee === "all") {
+          showNotification(`Tugas "${title}" ditugaskan ke semua anggota!`, "success");
+        } else {
+          showNotification(`Tugas "${title}" ditugaskan ke ${assignee}!`, "success");
+        }
+      }
+      
+      document.getElementById("todoTitle").value = "";
+      document.getElementById("todoDesc").value = "";
+      document.getElementById("todoAssignee").value = "";
+      document.getElementById("todoDueDate").value = "";
+      
+      updateEmptyState();
+      updateDashboard();
+      updateSectionCounts();
+      playSound();
+      showNotification("Tugas berhasil ditambahkan!", "success");
+    }
+
+    function renderTodo(todo) {
+      if (document.getElementById("todo-" + todo.id)) return;
+      
+      const now = new Date();
+      const isOverdue = todo.dueDate && new Date(todo.dueDate) < now && !todo.completed;
+      const section = todo.completed ? "completed" : isOverdue ? "overdue" : "inbox";
+      
+      const div = document.createElement("div");
+      div.className = `todo-item ${todo.completed ? 'completed' : ''}`;
+      div.id = "todo-" + todo.id;
+      
+      if (isOverdue) {
+        div.classList.add("priority-overdue");
+      } else if (todo.priority) {
+        div.classList.add(`priority-${todo.priority}`);
+      }
+      
+      const memberChecks = todo.memberChecks || {};
+      const assignedMembers = getAssignedMembers(todo);
+      const totalMembers = assignedMembers.length;
+      const checkedCount = assignedMembers.filter(member => memberChecks[member]).length;
+      const currentUserChecked = memberChecks[window.userName] || false;
+      
+      let priorityBadge = '';
+      if (isOverdue) {
+        priorityBadge = '<span class="priority-badge overdue">TERLAMBAT</span>';
+      } else if (todo.priority) {
+        priorityBadge = `<span class="priority-badge ${todo.priority}">${todo.priority.toUpperCase()}</span>`;
+      }
+      
+      let dueDateBadge = '';
+      if (todo.dueDate) {
+        const dueDate = new Date(todo.dueDate);
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        
+        const dueDateStr = dueDate.toLocaleDateString('id-ID', { 
+          day: '2-digit', 
+          month: 'short', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        });
+        
+        let dueBadgeClass = '';
+        let dueIcon = '📅';
+        
+        if (isOverdue) {
+          dueBadgeClass = 'overdue';
+          dueIcon = '⚠️';
+        } else if (dueDate.toDateString() === today.toDateString()) {
+          dueBadgeClass = 'today';
+          dueIcon = '🔥';
+        } else if (dueDate.toDateString() === tomorrow.toDateString()) {
+          dueBadgeClass = 'tomorrow';
+          dueIcon = '⏰';
+        }
+        
+        dueDateBadge = `<span class="due-date-badge ${dueBadgeClass}">${dueIcon} ${dueDateStr}</span>`;
+      }
+      
+      let assignmentBadge = '';
+      if (todo.assignedTo && todo.assignedTo !== "all") {
+        assignmentBadge = `<span class="assignment-badge">👤 ${todo.assignedTo}</span>`;
+      } else if (todo.assignedTo === "all") {
+        assignmentBadge = `<span class="assignment-badge">👥 Semua Anggota</span>`;
+      } else {
+        assignmentBadge = `<span class="assignment-badge">⚪ Tidak Ditugaskan</span>`;
+      }
+      
+      let completionStatus = '';
+      if (todo.completed) {
+        completionStatus = `
+          <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem; font-size: 0.875rem;">
+            <div style="color: #059669; font-weight: 600; margin-bottom: 0.5rem;">✅ Tugas Selesai!</div>
+            <div style="color: #6b7280; font-size: 0.8rem; font-style: italic;">Diselesaikan pada ${new Date(todo.completedAt).toLocaleString('id-ID')}</div>
+          </div>
+        `;
+      } else if (checkedCount > 0 && totalMembers > 0) {
+        const progressPercentage = (checkedCount / totalMembers) * 100;
+        const checkedMembers = assignedMembers.filter(m => memberChecks[m]);
+        const uncheckedMembers = assignedMembers.filter(m => !memberChecks[m]);
+        
+        completionStatus = `
+          <div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem; font-size: 0.875rem;">
+            <div style="color: #92400e; font-weight: 600; margin-bottom: 0.5rem;">Progres: ${checkedCount}/${totalMembers} anggota</div>
+            <div style="background: #f3f4f6; border-radius: 4px; height: 8px; margin: 0.5rem 0;">
+              <div style="background: #f59e0b; height: 100%; border-radius: 4px; width: ${progressPercentage}%; transition: width 0.3s ease;"></div>
+            </div>
+            <div style="font-size: 0.75rem; color: #374151; margin-top: 0.5rem;">
+              ${checkedMembers.length > 0 ? `<span style="color: #059669; font-weight: 500;">✅ ${checkedMembers.join(', ')}</span>` : ''}
+              ${uncheckedMembers.length > 0 ? `<span style="color: #6b7280;">⏳ ${uncheckedMembers.join(', ')}</span>` : ''}
+            </div>
+          </div>
+        `;
+      }
+      
+      const canCheck = isTaskAssignedToUser(todo, window.userName) && window.role !== "mentor";
+      const checkButton = canCheck ? `
+        <button onclick="toggleCompletion(${todo.id})" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 0.5rem 1rem; cursor: pointer; border-radius: 8px; transition: all 0.2s ease; font-size: 0.875rem; box-shadow: none; ${currentUserChecked ? 'background: #fef3c7; border-color: var(--warning-color); color: #92400e;' : ''}">
+          <input type="checkbox" ${currentUserChecked ? 'checked' : ''} onchange="event.preventDefault()" style="width: 16px; height: 16px; margin: 0; accent-color: var(--success-color); cursor: pointer;">
+          <span>${currentUserChecked ? '✅ Sudah Check' : 'Check Tugas'}</span>
+        </button>
+      ` : window.role === "mentor" ? `
+        <div style="display: flex; align-items: center; gap: 0.5rem; background: #f0f4ff; color: #667eea; border: 1px solid #c7d2fe; padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem;">
+          <span>👑 Mentor - Hanya Memantau</span>
+        </div>
+      ` : `
+        <div style="display: flex; align-items: center; gap: 0.5rem; background: #f3f4f6; color: #6b7280; border: 1px solid #d1d5db; padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem;">
+          <span>🚫 Tidak ditugaskan kepada Anda</span>
+        </div>
+      `;
+      
+      div.innerHTML = `
+        <strong>${priorityBadge}${dueDateBadge}${assignmentBadge}${escapeHtml(todo.title)}</strong>
+        <span style="color: var(--text-secondary); font-size: 0.95rem; display: block; margin-bottom: 0.75rem;">${escapeHtml(todo.desc)}</span>
+        <div style="color: var(--text-secondary); font-size: 0.8rem; font-style: italic; margin-bottom: 1rem;">👤 Dibuat oleh ${escapeHtml(todo.user)}</div>
+        ${completionStatus}
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem; align-items: center; flex-wrap: wrap;">
+          ${checkButton}
+          <button onclick="toggleComment(${todo.id})" style="background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 0.5rem 1rem; font-size: 0.875rem; box-shadow: none;">💬 Komentar</button>
+        </div>
+        ${window.role === "mentor" ? `<button onclick="deleteTodo(${todo.id})" title="Hapus tugas" style="position: absolute; top: 1rem; right: 1rem; background: var(--danger-color); color: white; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);">🗑️</button>` : ""}
+        <div class="comment-box hidden" id="commentBox-${todo.id}" style="margin-top: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+          <h4 style="color: var(--text-primary); margin-bottom: 1rem; font-size: 1rem;">💬 Komentar</h4>
+          <div class="comment-list" style="max-height: 300px; overflow-y: auto; margin-bottom: 1rem;"></div>
+          <div style="display: flex; gap: 0.5rem; align-items: flex-end;">
+            <input type="text" id="commentInput-${todo.id}" placeholder="Tulis komentar..." onkeypress="if(event.key==='Enter') sendComment(${todo.id})" style="flex: 1; margin-bottom: 0;">
+            <button onclick="sendComment(${todo.id})" style="padding: 0.75rem 1rem; margin-bottom: 0;">Kirim</button>
+          </div>
+        </div>`;
+      
+      const targetContainer = section === "completed" ? document.getElementById("completedTasks") :
+                             section === "overdue" ? document.getElementById("overdueTasks") :
+                             document.getElementById("inboxTasks");
+      
+      if (targetContainer) {
+        targetContainer.appendChild(div);
+      }
+      
+      updateEmptyState();
+      updateSectionCounts();
+
+      if (todo.comments) {
+        todo.comments.forEach(c => appendComment(c, false));
+      }
+    }
+
+    // Utility functions
+    function getAssignedMembers(todo) {
+      if (!todo.assignedTo || todo.assignedTo === "all") {
+        return Array.from(window.roomMembers.entries())
+          .filter(([name, info]) => info.role === "member")
+          .map(([name]) => name);
+      } else {
+        return [todo.assignedTo];
+      }
+    }
+
+    function isTaskAssignedToUser(todo, username) {
+      const userInfo = window.roomMembers.get(username);
+      const userRole = userInfo ? userInfo.role : "member";
+      
+      if (userRole === "mentor") {
+        return false;
+      }
+      
+      if (!todo.assignedTo || todo.assignedTo === "all") {
+        return true;
+      }
+      return todo.assignedTo === username;
+    }
+
+    function updateSectionCounts() {
+      const overdueTasks = document.querySelectorAll('#overdueTasks .todo-item');
+      const inboxTasks = document.querySelectorAll('#inboxTasks .todo-item');
+      const completedTasks = document.querySelectorAll('#completedTasks .todo-item');
+      
+      document.getElementById('overdueCount').textContent = overdueTasks.length;
+      document.getElementById('inboxCount').textContent = inboxTasks.length;
+      document.getElementById('completedCount').textContent = completedTasks.length;
+      
+      document.getElementById('overdueSection').style.display = overdueTasks.length > 0 ? 'block' : 'none';
+      document.getElementById('inboxSection').style.display = inboxTasks.length > 0 ? 'block' : 'none';
+      document.getElementById('completedSection').style.display = completedTasks.length > 0 ? 'block' : 'none';
+    }
+
+    function clearAllTodoSections() {
+      document.getElementById("overdueTasks").innerHTML = '';
+      document.getElementById("inboxTasks").innerHTML = '';
+      document.getElementById("completedTasks").innerHTML = '';
+    }
+
+    function toggleCompletion(todoId) {
+      const todoDiv = document.getElementById("todo-" + todoId);
+      const checkbox = todoDiv.querySelector('input[type="checkbox"]');
+      
+      const isChecked = !checkbox.checked;
+      
+      const checkData = {
+        type: "memberCheck",
+        todoId: todoId,
+        userName: window.userName,
+        checked: isChecked
+      };
+      
+      broadcast(checkData);
+      handleMemberCheck(checkData);
+      saveTodos();
+      updateDashboard();
+      updateSectionCounts();
+    }
+
+    function handleMemberCheck(data) {
+      const todos = getAllTodos();
+      const todoIndex = todos.findIndex(t => t.id === data.todoId);
+      if (todoIndex === -1) return;
+      
+      const todo = todos[todoIndex];
+      if (!todo.memberChecks) todo.memberChecks = {};
+      todo.memberChecks[data.userName] = data.checked;
+      
+      const assignedMembers = getAssignedMembers(todo);
+      const checkedMembers = assignedMembers.filter(member => todo.memberChecks[member]);
+      const totalMembers = assignedMembers.length;
+      
+      const wasCompleted = todo.completed;
+      const nowCompleted = checkedMembers.length >= totalMembers && totalMembers > 0;
+      
+      if (nowCompleted && !wasCompleted) {
+        todo.completed = true;
+        todo.completedBy = checkedMembers;
+        todo.completedAt = Date.now();
+        playSound();
+        showNotification(`Tugas "${todo.title}" diselesaikan oleh semua anggota yang ditugaskan!`, "success");
+      } else if (!nowCompleted && wasCompleted) {
+        todo.completed = false;
+        todo.completedBy = [];
+        todo.completedAt = null;
+      }
+      
+      localStorage.setItem("todos", JSON.stringify(todos));
+      refreshTodoDisplay(data.todoId);
+    }
+
+    function refreshTodoDisplay(todoId) {
+      const todoDiv = document.getElementById("todo-" + todoId);
+      if (!todoDiv) return;
+      
+      const todos = getAllTodos();
+      const todo = todos.find(t => t.id === todoId);
+      if (!todo) return;
+      
+      todoDiv.remove();
+      renderTodo(todo);
+    }
+
+    function refreshAllTodoDisplays() {
+      const todos = getAllTodos();
+      clearAllTodoSections();
+      todos.forEach(todo => renderTodo(todo));
+      updateEmptyState();
+      updateDashboard();
+      updateSectionCounts();
+    }
+
+    function toggleComment(todoId) {
+      document.getElementById("commentBox-" + todoId).classList.toggle("hidden");
+    }
+
+    function sendComment(todoId) {
+      const text = document.getElementById("commentInput-" + todoId).value.trim();
+      if (!text) return;
+
+      const msg = { type: "comment", todoId, text, user: window.userName, timestamp: Date.now() };
+      appendComment(msg);
+      saveTodos();
+      broadcast(msg);
+      document.getElementById("commentInput-" + todoId).value = "";
+      playSound();
+      showNotification("Komentar terkirim!", "success");
+    }
+
+    function appendComment(msg, save = true) {
+      const list = document.querySelector(`#todo-${msg.todoId} .comment-list`);
+      if (!list) return;
+
+      const div = document.createElement("div");
+      div.style.cssText = "display: flex; align-items: flex-start; justify-content: space-between; background: var(--bg-primary); border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; box-shadow: var(--shadow-light); border: 1px solid var(--border-color);";
+
+      const left = document.createElement("div");
+      left.style.cssText = "flex: 1; word-break: break-word;";
+
+      const strongEl = document.createElement("strong");
+      strongEl.style.cssText = "color: #667eea; font-weight: 600; font-size: 0.875rem;";
+      strongEl.textContent = msg.user + ":";
+
+      left.appendChild(strongEl);
+
+      const span = document.createElement("span");
+      span.style.cssText = "color: var(--text-primary); font-size: 0.875rem; margin-left: 0.5rem;";
+      span.textContent = msg.text || "";
+      left.appendChild(span);
+
+      div.appendChild(left);
+
+      if (window.role === "mentor" || msg.user === window.userName) {
+        const del = document.createElement("button");
+        del.style.cssText = "background: var(--danger-color); color: white; border: none; width: 24px; height: 24px; border-radius: 50%; font-size: 0.75rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; flex-shrink: 0; margin-left: 0.5rem;";
+        del.innerHTML = "✖";
+        del.onclick = () => {
+          div.remove();
+          saveTodos();
+          showNotification("Komentar dihapus", "success");
+        };
+        div.appendChild(del);
+      }
+
+      list.appendChild(div);
+      list.scrollTop = list.scrollHeight;
+      if (save) saveTodos();
+    }
+
+    function handleData(data) {
+      if (data.type === "todo") {
+        renderTodo(data);
+        saveTodos();
+        updateDashboard();
+        updateSectionCounts();
+        
+        if (data.assignedTo) {
+          if (data.assignedTo === window.userName) {
+            playSound("assignment");
+            showNotification(`🎯 Tugas baru ditugaskan kepada Anda: "${data.title}"`, "warning");
+            
+            if ("Notification" in window && Notification.permission === "granted") {
+              new Notification("TodoPro - Tugas Baru Ditugaskan", {
+                body: `Anda ditugaskan: "${data.title}"`
+              });
+            }
+            
+          } else if (data.assignedTo === "all") {
+            playSound("assignment");
+            showNotification(`👥 Tugas tim baru: "${data.title}"`, "success");
+          }
+        }
+      }
+      if (data.type === "comment") {
+        appendComment(data);
+        saveTodos();
+        playSound();
+        showNotification(`${data.user} berkomentar`, "success");
+      }
+      if (data.type === "allTodos") {
+        data.todos.forEach(todo => renderTodo(todo));
+        saveTodos();
+        updateDashboard();
+        updateSectionCounts();
+      }
+      if (data.type === "deleteTodo") {
+        document.getElementById("todo-" + data.todoId)?.remove();
+        saveTodos();
+        updateEmptyState();
+        updateDashboard();
+        updateSectionCounts();
+      }
+      if (data.type === "memberJoined") {
+        window.roomMembers.set(data.userName, { status: "online", role: "member" });
+        updateMemberList();
+        refreshAllTodoDisplays();
+      }
+      if (data.type === "membersList") {
+        data.members.forEach(([name, info]) => window.roomMembers.set(name, info));
+        updateMemberList();
+        refreshAllTodoDisplays();
+      }
+      if (data.type === "memberCheck") {
+        handleMemberCheck(data);
+      }
+    }
+
+    // Search and filter
+    function filterTasks() {
+      const searchTerm = document.getElementById("searchInput").value.toLowerCase();
+      const assigneeFilter = document.getElementById("assigneeFilter").value;
+      
+      const todos = document.querySelectorAll(".todo-item");
+      
+      todos.forEach(todoDiv => {
+        const title = todoDiv.querySelector("strong").textContent.toLowerCase();
+        const desc = todoDiv.querySelector("span").textContent.toLowerCase();
+        
+        const matchesSearch = title.includes(searchTerm) || desc.includes(searchTerm);
+        
+        let matchesAssignee = true;
+        if (assigneeFilter !== "all") {
+          const todoId = parseInt(todoDiv.id.replace("todo-", ""));
+          const todos = getAllTodos();
+          const todo = todos.find(t => t.id === todoId);
+          
+          if (assigneeFilter === "assigned-to-me") {
+            matchesAssignee = isTaskAssignedToUser(todo, window.userName);
+          } else if (assigneeFilter === "unassigned") {
+            matchesAssignee = !todo.assignedTo;
+          } else {
+            matchesAssignee = todo.assignedTo === assigneeFilter;
+          }
+        }
+        
+        if (matchesSearch && matchesAssignee) {
+          todoDiv.style.display = "block";
+        } else {
+          todoDiv.style.display = "none";
+        }
+      });
+      
+      updateSectionCounts();
+    }
+
+    // Data management
+    function getAllTodos() {
+      return JSON.parse(localStorage.getItem("todos") || "[]");
+    }
+
+    function saveTodos() {
+      const todos = [];
+        const id = parseInt(div.id.replace("todo-", ""));
+        const titleElement = div.querySelector("strong");
+        const descElement = div.querySelector("span");
+        
+        if (!titleElement || !descElement) return;
+        
+        let title = titleElement.textContent;
+        // Bersihkan badge dari judul
+        title = title.replace(/^(TERLAMBAT|HIGH|MEDIUM|LOW)\s*/, "");
+        title = title.replace(/^(📅|⚠️|🔥|⏰)\s*[^👤👥⚪]*\s*/, "");
+        title = title.replace(/^👤\s*[^👥]*\s*/, "");
+        title = title.replace(/^👥\s*Semua Anggota\s*/, "");
+        title = title.replace(/^⚪\s*Tidak Ditugaskan\s*/, "");
+        title = title.trim();
+        
+        const desc = descElement.textContent;
+        const completed = div.classList.contains('completed');
+        
+        const priority = div.classList.contains("priority-high") ? "high" : 
+                        div.classList.contains("priority-medium") ? "medium" : 
+                        div.classList.contains("priority-low") ? "low" : "medium";
+        
+        const assignmentBadge = div.querySelector(".assignment-badge");
+        let assignedTo = "";
+        if (assignmentBadge) {
+          const badgeText = assignmentBadge.textContent;
+          if (badgeText.includes("Semua Anggota")) {
+            assignedTo = "all";
+          } else if (badgeText.includes("Tidak Ditugaskan")) {
+            assignedTo = null;
+          } else {
+            assignedTo = badgeText.replace("👤 ", "").trim();
+          }
+        }
+        
+        const existingTodos = JSON.parse(localStorage.getItem("todos") || "[]");
+        const existingTodo = existingTodos.find(t => t.id === id);
+        
+        let completedBy = [];
+        let completedAt = null;
+        let memberChecks = existingTodo ? existingTodo.memberChecks || {} : {};
+        let user = existingTodo ? existingTodo.user : window.userName;
+        let dueDate = existingTodo ? existingTodo.dueDate : null;
+        
+        if (completed && existingTodo) {
+          completedBy = existingTodo.completedBy || [];
+          completedAt = existingTodo.completedAt || Date.now();
+        }
+        
+        const comments = [];
+        div.querySelectorAll(".comment-list > div").forEach(c => {
+          const strong = c.querySelector("strong");
+          const span = c.querySelector("span");
+          if (strong && span) {
+            const username = strong.textContent.replace(":", "").trim();
+            const text = span.textContent.trim();
+            comments.push({
+              type: "comment",
+              todoId: id,
+              user: username,
+              text,
+              timestamp: Date.now()
+            });
+          }
+        });
+        
+        todos.push({ 
+          type: "todo", 
+          id, 
+          title, 
+          desc, 
+          priority,
+          assignedTo,
+          dueDate,
+          user, 
+          comments, 
+          completed,
+          completedBy,
+          completedAt,
+          memberChecks,
+          createdAt: existingTodo ? existingTodo.createdAt : Date.now()
+        });
+      });
+      localStorage.setItem("todos", JSON.stringify(todos));
+    }
+
+    // Dashboard and analytics
+    function updateDashboard() {
+      const todos = getAllTodos();
+      const now = new Date();
+      
+      const totalTasks = todos.length;
+      const completedTasks = todos.filter(t => t.completed).length;
+      const overdueTasks = todos.filter(t => t.dueDate && new Date(t.dueDate) < now && !t.completed).length;
+      const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+      const assignedToMe = todos.filter(t => isTaskAssignedToUser(t, window.userName)).length;
+      
+      document.getElementById("totalTasks").textContent = totalTasks;
+      document.getElementById("completedTasks").textContent = completedTasks;
+      document.getElementById("overdueTasks").textContent = overdueTasks;
+      document.getElementById("completionRate").textContent = completionRate + "%";
+      document.getElementById("assignedToMe").textContent = assignedToMe;
+      
+      const rateElement = document.getElementById("completionRate");
+      if (completionRate >= 80) {
+        rateElement.style.color = "#059669";
+      } else if (completionRate >= 50) {
+        rateElement.style.color = "#d97706";
+      } else {
+        rateElement.style.color = "#dc2626";
+      }
+      
+      // Warnai statistik tugas terlambat
+      const overdueElement = document.getElementById("overdueTasks");
+      if (overdueTasks > 0) {
+        overdueElement.style.color = "#dc2626";
+        overdueElement.parentElement.style.animation = "urgentPulse 2s infinite";
+      } else {
+        overdueElement.style.color = "#059669";
+        overdueElement.parentElement.style.animation = "";
+      }
+    }
+
+    function deleteTodo(todoId) {
+      if (window.role !== "mentor") {
+        showNotification("Hanya mentor yang dapat menghapus tugas", "error");
+        return;
+      }
+      
+      if (!confirm("Yakin hapus tugas ini?")) return;
+      
+      document.getElementById("todo-" + todoId)?.remove();
+      saveTodos();
+      broadcast({ type: "deleteTodo", todoId });
+      updateEmptyState();
+      updateDashboard();
+      updateSectionCounts();
+      showNotification("Tugas berhasil dihapus", "success");
+    }
+
+    function updateEmptyState() {
+      const emptyState = document.getElementById("emptyState");
+      const allTodos = document.querySelectorAll(".todo-item");
+      
+      if (allTodos.length === 0) {
+        emptyState.style.display = "block";
+        if (window.role === "mentor") {
+          emptyState.innerHTML = `
+            <p>Belum ada tugas</p>
+            <small>Tambahkan tugas pertama untuk tim Anda!</small>
+          `;
+        } else {
+          emptyState.innerHTML = `
+            <p>Belum ada tugas</p>
+            <small>Mentor akan menambahkan tugas untuk tim!</small>
+          `;
+        }
+      } else {
+        emptyState.style.display = "none";
+      }
+    }
+
+    function broadcast(msg) {
+      if (window.connections) {
+        window.connections.forEach(c => {
+          try {
+            c.send(msg);
+          } catch (e) {
+            console.log("Gagal mengirim ke koneksi:", e);
+          }
+        });
+      }
+      if (window.conn && window.conn.open) {
+        try {
+          window.conn.send(msg);
+        } catch (e) {
+          console.log("Gagal mengirim ke koneksi utama:", e);
+        }
+      }
+    }
+
+    function broadcastToOthers(msg, excludeConnection) {
+      if (window.connections) {
+        window.connections.forEach(c => {
+          if (c !== excludeConnection) {
+            try {
+              c.send(msg);
+            } catch (e) {
+              console.log("Gagal relay ke koneksi:", e);
+            }
+          }
+        });
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str && str !== "") return "";
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    // Auto-save setiap 10 detik
+    setInterval(() => {
+      if (window.roomId && window.userName && window.role) {
+        saveTodos();
+      }
+    }, 10000);
+
+    // Inisialisasi toggle sound dan theme saat DOM loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      updateSoundToggle();
+      updateThemeToggle();
+    });
+  </script>
+</body>
+</html><!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
@@ -54,3 +923,771 @@
       padding: 2rem 1rem;
       background: rgba(255, 255, 255, 0.1);
       backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      min-height: 120px;
+      position: relative;
+    }
+
+    header h1 {
+      color: white;
+      font-size: 2.5rem;
+      font-weight: 300;
+      letter-spacing: -1px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      position: relative;
+    }
+
+    .sound-toggle, .theme-toggle {
+      position: absolute;
+      top: 2rem;
+    }
+
+    .sound-toggle { left: 2rem; }
+    .theme-toggle { right: 2rem; }
+
+    .sound-toggle button, .theme-toggle button {
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      font-size: 1.5rem;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      line-height: 1;
+    }
+
+    .sound-toggle button:hover, .theme-toggle button:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.1);
+    }
+
+    .card {
+      background: var(--bg-primary);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      box-shadow: var(--shadow-medium);
+      border: 1px solid var(--border-color);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(31, 38, 135, 0.45);
+    }
+
+    .card h2, .card h3 {
+      color: var(--text-primary);
+      margin-bottom: 1rem;
+      font-weight: 600;
+    }
+
+    .dashboard-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .stat-item {
+      text-align: center;
+      background: var(--bg-secondary);
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: var(--shadow-light);
+    }
+
+    .stat-number {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+    }
+
+    .member-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .member-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--bg-secondary);
+      padding: 0.5rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.875rem;
+      border: 1px solid var(--border-color);
+    }
+
+    .member-chip.mentor {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-color: transparent;
+    }
+
+    .member-chip .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success-color);
+    }
+
+    .member-chip .status-dot.offline {
+      background: #6b7280;
+    }
+
+    .assignment-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: #f3e8ff;
+      color: var(--assignment-color);
+      padding: 0.25rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      border: 1px solid #ddd6fe;
+      margin-right: 0.5rem;
+    }
+
+    .notification-container {
+      position: fixed;
+      top: 2rem;
+      right: 2rem;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-width: 400px;
+    }
+
+    .notification-toast {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      box-shadow: var(--shadow-medium);
+      animation: slideIn 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .notification-toast.success {
+      border-color: var(--success-color);
+      background: #f0fdf4;
+      color: #065f46;
+    }
+
+    .notification-toast.error {
+      border-color: var(--danger-color);
+      background: #fef2f2;
+      color: #991b1b;
+    }
+
+    .notification-toast.warning {
+      border-color: var(--warning-color);
+      background: #fffbeb;
+      color: #92400e;
+    }
+
+    .priority-high {
+      border-left: 4px solid var(--danger-color);
+      background: linear-gradient(90deg, rgba(239, 68, 68, 0.1), transparent);
+    }
+
+    .priority-medium {
+      border-left: 4px solid var(--warning-color);
+      background: linear-gradient(90deg, rgba(245, 158, 11, 0.1), transparent);
+    }
+
+    .priority-low {
+      border-left: 4px solid var(--success-color);
+      background: linear-gradient(90deg, rgba(16, 185, 129, 0.1), transparent);
+    }
+
+    .priority-overdue {
+      border-left: 4px solid #dc2626;
+      background: linear-gradient(90deg, rgba(220, 38, 38, 0.15), transparent);
+      animation: urgentPulse 2s infinite;
+    }
+
+    .priority-badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      margin-right: 0.5rem;
+    }
+
+    .priority-badge.high {
+      background: #fef2f2;
+      color: #dc2626;
+      border: 1px solid #fecaca;
+    }
+
+    .priority-badge.medium {
+      background: #fffbeb;
+      color: #d97706;
+      border: 1px solid #fde68a;
+    }
+
+    .priority-badge.low {
+      background: #f0fdf4;
+      color: #059669;
+      border: 1px solid #bbf7d0;
+    }
+
+    .priority-badge.overdue {
+      background: #fef2f2;
+      color: #dc2626;
+      border: 1px solid #fca5a5;
+    }
+
+    .due-date-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: #f0f4ff;
+      color: #667eea;
+      padding: 0.25rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      border: 1px solid #c7d2fe;
+      margin-right: 0.5rem;
+    }
+
+    .due-date-badge.overdue {
+      background: #fef2f2;
+      color: #dc2626;
+      border-color: #fca5a5;
+      animation: urgentPulse 2s infinite;
+    }
+
+    .due-date-badge.today {
+      background: #fffbeb;
+      color: #d97706;
+      border-color: #fde68a;
+    }
+
+    .due-date-badge.tomorrow {
+      background: #f0fdf4;
+      color: #059669;
+      border-color: #bbf7d0;
+    }
+
+    .todo-section {
+      margin-bottom: 2rem;
+    }
+
+    .todo-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      padding: 1rem;
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+    }
+
+    .todo-section-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 0;
+    }
+
+    .todo-section-count {
+      background: var(--primary-gradient);
+      color: white;
+      padding: 0.25rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .todo-section-count.completed {
+      background: var(--success-color);
+    }
+
+    .todo-section-count.overdue {
+      background: var(--danger-color);
+      animation: urgentPulse 2s infinite;
+    }
+
+    .todo-item {
+      background: var(--bg-primary);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      box-shadow: var(--shadow-light);
+      border: 1px solid var(--border-color);
+      position: relative;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .todo-item:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-medium);
+    }
+
+    .todo-item.completed {
+      background: #f0f9ff;
+      border-color: var(--success-color);
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+    }
+
+    .todo-item strong {
+      color: var(--text-primary);
+      font-size: 1.1rem;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 0.5rem;
+    }
+
+    input[type="text"], input[type="datetime-local"], select, textarea {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 2px solid var(--border-color);
+      border-radius: 12px;
+      font-size: 1rem;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      margin-bottom: 0.75rem;
+    }
+
+    input[type="text"]:focus, input[type="datetime-local"]:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    button {
+      background: var(--primary-gradient);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .status {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .status.online {
+      background: var(--success-color);
+      color: white;
+    }
+
+    .status.offline {
+      background: var(--danger-color);
+      color: white;
+    }
+
+    .hidden { 
+      display: none; 
+    }
+
+    .auth-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    @media (min-width: 480px) {
+      .auth-buttons {
+        flex-direction: row;
+        align-items: center;
+      }
+      
+      .auth-buttons button {
+        flex: 1;
+      }
+      
+      .auth-buttons input {
+        flex: 2;
+        margin: 0 0.5rem;
+      }
+    }
+
+    .add-todo-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .add-todo-form input, .add-todo-form select, .add-todo-form textarea {
+      margin-bottom: 0;
+    }
+
+    .add-todo-form .full-width {
+      grid-column: 1 / -1;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-secondary);
+    }
+
+    @keyframes urgentPulse {
+      0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(100%); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    @media (max-width: 768px) {
+      .container { padding: 0 1rem; }
+      .card { padding: 1rem; }
+      header h1 { font-size: 2rem; }
+      .dashboard-stats { grid-template-columns: repeat(2, 1fr); }
+      .add-todo-form { grid-template-columns: 1fr; }
+      .sound-toggle, .theme-toggle { top: 1rem; }
+      .sound-toggle { left: 1rem; }
+      .theme-toggle { right: 1rem; }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>📝 TodoPro Enhanced</h1>
+    <div class="sound-toggle">
+      <button id="soundToggle" onclick="toggleSound()">🔊</button>
+    </div>
+    <div class="theme-toggle">
+      <button id="themeToggle" onclick="toggleTheme()">🌙</button>
+    </div>
+  </header>
+
+  <div class="notification-container" id="notificationContainer"></div>
+
+  <div class="container">
+    <div id="authSection" class="card">
+      <h2>🚀 Mari Berkolaborasi</h2>
+      <input type="text" id="userName" placeholder="Masukkan nama Anda">
+      <div class="auth-buttons">
+        <button onclick="createRoom()">🎯 Buat Room (Mentor)</button>
+        <input type="text" id="roomIdInput" placeholder="Room ID untuk bergabung">
+        <button onclick="joinRoom()">🤝 Gabung Room (Member)</button>
+      </div>
+    </div>
+
+    <div id="app" class="hidden">
+      <div class="card">
+        <h3>📈 Dashboard Analitik</h3>
+        <div class="dashboard-stats">
+          <div class="stat-item">
+            <div class="stat-number" id="totalTasks">0</div>
+            <div class="stat-label">Total Tugas</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number" id="completedTasks">0</div>
+            <div class="stat-label">Selesai</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number" id="completionRate">0%</div>
+            <div class="stat-label">Tingkat Penyelesaian</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number" id="overdueTasks">0</div>
+            <div class="stat-label">Terlambat</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number" id="assignedToMe">0</div>
+            <div class="stat-label">Tugas Saya</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 id="roomTitle">🏠 Room</h2>
+        <p id="userRole" style="color: #667eea; font-weight: 500;"></p>
+        <p style="margin-top: 0.5rem;">Status: <span id="status" class="status offline">Offline</span></p>
+        
+        <div style="margin-top: 1rem;">
+          <h4 style="color: var(--text-primary); margin-bottom: 0.5rem;">👥 Anggota</h4>
+          <div class="member-list" id="memberList"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <input type="text" id="searchInput" placeholder="🔍 Cari tugas..." onkeyup="filterTasks()">
+        <select id="assigneeFilter" onchange="filterTasks()">
+          <option value="all">Semua Penugasan</option>
+          <option value="assigned-to-me">Ditugaskan ke Saya</option>
+          <option value="unassigned">Belum Ditugaskan</option>
+        </select>
+      </div>
+
+      <div id="todoSection" class="card">
+        <h3>📋 Daftar Tugas</h3>
+        
+        <div id="addTodoForm" class="add-todo-form hidden">
+          <input type="text" id="todoTitle" placeholder="Judul tugas...">
+          <textarea id="todoDesc" placeholder="Deskripsi tugas..." rows="2"></textarea>
+          
+          <select id="todoPriority">
+            <option value="low">🟢 Prioritas Rendah</option>
+            <option value="medium" selected>🟡 Prioritas Sedang</option>
+            <option value="high">🔴 Prioritas Tinggi</option>
+          </select>
+          
+          <input type="datetime-local" id="todoDueDate" placeholder="Batas waktu...">
+          
+          <select id="todoAssignee">
+            <option value="">👥 Tugaskan ke Semua Anggota</option>
+            <option value="unassigned">⚪ Biarkan Tidak Ditugaskan</option>
+          </select>
+          
+          <button onclick="addTodo()" class="full-width">➕ Tambah Tugas</button>
+        </div>
+        
+        <div id="memberInfo" class="hidden" style="background: #f0f9ff; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border: 1px solid #bae6fd;">
+          <p style="color: #0369a1; margin: 0 0 0.5rem 0; font-size: 0.9rem;">
+            💡 <strong>Anggota:</strong> Periksa tugas yang ditugaskan kepada Anda!
+          </p>
+          <p style="color: #0369a1; margin: 0; font-size: 0.85rem; font-style: italic;">
+            📋 Mentor hanya memantau progres dan tidak perlu melakukan checklist.
+          </p>
+        </div>
+        
+        <div id="todoList">
+          <div id="overdueSection" class="todo-section">
+            <div class="todo-section-header">
+              <div class="todo-section-title">⚠️ Tugas Terlambat</div>
+              <span id="overdueCount" class="todo-section-count overdue">0</span>
+            </div>
+            <div id="overdueTasks"></div>
+          </div>
+
+          <div id="inboxSection" class="todo-section">
+            <div class="todo-section-header">
+              <div class="todo-section-title">📥 Kotak Masuk (Tugas Aktif)</div>
+              <span id="inboxCount" class="todo-section-count">0</span>
+            </div>
+            <div id="inboxTasks"></div>
+          </div>
+
+          <div id="completedSection" class="todo-section">
+            <div class="todo-section-header">
+              <div class="todo-section-title">✅ Tugas Selesai</div>
+              <span id="completedCount" class="todo-section-count completed">0</span>
+            </div>
+            <div id="completedTasks"></div>
+          </div>
+
+          <div class="empty-state" id="emptyState">
+            <p>Belum ada tugas</p>
+            <small>Mentor akan menambahkan tugas untuk Anda!</small>
+          </div>
+        </div>
+      </div>
+
+      <button onclick="logout()" style="background: linear-gradient(135deg, var(--danger-color) 0%, #dc2626 100%); width: 100%; margin-top: 1rem;">🚪 Keluar Room</button>
+    </div>
+  </div>
+
+  <script>
+    // Global variables
+    window.peer = null;
+    window.conn = null;
+    window.connections = [];
+    window.userName = "";
+    window.roomId = "";
+    window.role = "";
+    window.roomMembers = new Map();
+    window.soundEnabled = true;
+
+    // Initialize on load
+    window.addEventListener("load", () => {
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme) {
+        document.documentElement.setAttribute("data-theme", savedTheme);
+        updateThemeToggle();
+      }
+      
+      window.soundEnabled = localStorage.getItem("soundEnabled") !== "false";
+      updateSoundToggle();
+      
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+    });
+
+    // Room creation
+    function createRoom() {
+      window.userName = document.getElementById("userName").value.trim();
+      if (!window.userName) {
+        showNotification("Isi nama Anda!", "error");
+        return;
+      }
+      
+      window.role = "mentor";
+      window.roomId = "room-" + Math.floor(Math.random() * 10000);
+      autoCreateRoom();
+    }
+
+    // Join room
+    function joinRoom() {
+      window.userName = document.getElementById("userName").value.trim();
+      const newRoomId = document.getElementById("roomIdInput").value.trim();
+      if (!window.userName || !newRoomId) {
+        showNotification("Isi nama dan Room ID!", "error");
+        return;
+      }
+      
+      window.role = "member";
+      window.roomId = newRoomId;
+      autoJoinRoom();
+    }
+
+    // Logout
+    function logout() {
+      localStorage.removeItem("todos");
+      if (window.peer) window.peer.destroy();
+      if (window.conn) window.conn.close();
+      if (window.connections) {
+        window.connections.forEach(c => c.close());
+        window.connections = [];
+      }
+      window.roomMembers.clear();
+      
+      window.userName = "";
+      window.roomId = "";
+      window.role = "";
+      
+      showNotification("Berhasil keluar", "success");
+      setTimeout(() => location.reload(), 1000);
+    }
+
+    // Theme system
+    function toggleTheme() {
+      const currentTheme = document.documentElement.getAttribute("data-theme");
+      const newTheme = currentTheme === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", newTheme);
+      localStorage.setItem("theme", newTheme);
+      updateThemeToggle();
+      showNotification("Tema diubah ke mode " + (newTheme === "dark" ? "gelap" : "terang"), "success");
+    }
+
+    function updateThemeToggle() {
+      const toggle = document.getElementById("themeToggle");
+      if (toggle) {
+        toggle.textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "☀️" : "🌙";
+      }
+    }
+
+    // Sound system
+    function toggleSound() {
+      window.soundEnabled = !window.soundEnabled;
+      localStorage.setItem("soundEnabled", window.soundEnabled);
+      updateSoundToggle();
+      
+      if (window.soundEnabled) {
+        playSound();
+        showNotification("Suara diaktifkan", "success");
+      } else {
+        showNotification("Suara dinonaktifkan", "warning");
+      }
+    }
+
+    function updateSoundToggle() {
+      const toggle = document.getElementById("soundToggle");
+      if (toggle) {
+        toggle.textContent = window.soundEnabled ? "🔊" : "🔇";
+        toggle.classList.toggle("muted", !window.soundEnabled);
+      }
+    }
+
+    function playSound(type = "notification") {
+      if (!window.soundEnabled) return;
+      
+      try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        if (type === "assignment") {
+          oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+          oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1);
+          oscillator.frequency.setValueAtTime(1200, audioContext.currentTime + 0.2);
+        } else {
+          oscillator.frequency.value = 600;
+        }
+        
+        oscillator.type = "sine";
+        
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.3);
+      } catch (e) {
+        console.log("Audio tidak didukung");
+      }
+    }
+
+    // Notification system
+    function showNotification(message, type = "success") {
+      const container = document.getElementById("notificationContainer");
+      const notification = document.createElement("div");
+      notification.className = `notification-toast ${type}`;
+      
+      const icon = type === "success" ?

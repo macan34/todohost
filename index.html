@@ -1076,6 +1076,104 @@
     </div>
   </div>
 
+  <!-- Add Todo Modal -->
+  <div id="addTodoModal" class="modal" onclick="handleModalClick(event, 'addTodoModal')">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h3>➕ Tambah Tugas Baru</h3>
+        <button class="modal-close" onclick="closeModal('addTodoModal')">×</button>
+      </div>
+      
+      <form id="addTodoForm" onsubmit="event.preventDefault(); createTodo();">
+        <div class="form-group">
+          <label for="todoTitle">Judul Tugas *</label>
+          <input type="text" name="todoTitle" class="form-control" placeholder="Contoh: Buat landing page untuk produk" required maxlength="100">
+        </div>
+        
+        <div class="form-group">
+          <label for="todoDescription">Deskripsi Tugas</label>
+          <textarea name="todoDescription" class="form-control" placeholder="Jelaskan detail tugas yang harus dikerjakan..." rows="4" maxlength="500"></textarea>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="todoPriority">Prioritas</label>
+            <select name="todoPriority" class="form-control">
+              <option value="low">🟢 Low - Tidak mendesak</option>
+              <option value="medium" selected>🟡 Medium - Penting tapi tidak urgent</option>
+              <option value="high">🟠 High - Penting dan mendesak</option>
+              <option value="urgent">🔴 Urgent - Harus selesai hari ini</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="todoDeadline">Deadline</label>
+            <input type="date" name="todoDeadline" class="form-control" min="${new Date().toISOString().split('T')[0]}">
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="todoAssignee">Assign ke Anggota</label>
+          <select name="todoAssignee" class="form-control" id="todoAssigneeSelect">
+            <option value="">-- Belum di-assign --</option>
+            <!-- Options will be populated by JavaScript -->
+          </select>
+          <small class="form-help">Kosongkan jika ingin di-assign nanti atau biarkan anggota mengambil sendiri</small>
+        </div>
+        
+        <div class="form-group">
+          <label for="todoCategory">Kategori</label>
+          <select name="todoCategory" class="form-control">
+            <option value="development">💻 Development</option>
+            <option value="design">🎨 Design</option>
+            <option value="marketing">📢 Marketing</option>
+            <option value="content">📝 Content</option>
+            <option value="research">🔍 Research</option>
+            <option value="testing">🧪 Testing</option>
+            <option value="meeting">🤝 Meeting</option>
+            <option value="other">📁 Lainnya</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="todoEstimation">Estimasi Waktu</label>
+          <select name="todoEstimation" class="form-control">
+            <option value="30m">⏱️ 30 menit</option>
+            <option value="1h">⏰ 1 jam</option>
+            <option value="2h">🕐 2 jam</option>
+            <option value="4h">🕓 4 jam (setengah hari)</option>
+            <option value="1d" selected>📅 1 hari</option>
+            <option value="2d">📅 2 hari</option>
+            <option value="3d">📅 3 hari</option>
+            <option value="1w">📆 1 minggu</option>
+            <option value="2w">📆 2 minggu</option>
+            <option value="custom">⚙️ Custom</option>
+          </select>
+        </div>
+        
+        <div class="info-box">
+          <h4>💡 Tips Membuat Tugas yang Efektif:</h4>
+          <ul>
+            <li>Gunakan judul yang spesifik dan actionable</li>
+            <li>Sertakan kriteria penyelesaian yang jelas</li>
+            <li>Pilih prioritas berdasarkan impact dan urgency</li>
+            <li>Set deadline yang realistis</li>
+            <li>Assign ke anggota yang memiliki skill yang sesuai</li>
+          </ul>
+        </div>
+        
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" onclick="closeModal('addTodoModal')">
+            Batal
+          </button>
+          <button type="submit" class="btn btn-primary">
+            ➕ Buat Tugas
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="container">
     <!-- Login Page -->
     <div id="loginPage" class="page active">
@@ -1426,6 +1524,18 @@
         const form = modal.querySelector('form');
         if (form) {
           form.reset();
+          
+          // Reset add todo modal to default state
+          if (modalId === 'addTodoModal') {
+            const modalTitle = modal.querySelector('.modal-header h3');
+            const submitBtn = form.querySelector('button[type="submit"]');
+            
+            if (modalTitle) modalTitle.textContent = '➕ Tambah Tugas Baru';
+            if (submitBtn) submitBtn.innerHTML = '➕ Buat Tugas';
+            
+            // Clear editing ID
+            form.removeAttribute('data-editing-id');
+          }
         }
       }
     }
@@ -1569,6 +1679,10 @@
             saveRoom(room);
           }
           
+          // Debug: Log to console
+          console.log('Entering room:', room);
+          console.log('User role:', window.app.user.role);
+          
           // Show room interface
           displayActiveRoom(room);
           showNotification(`Masuk ke room "${room.roomName}"`, 'success');
@@ -1586,76 +1700,91 @@
     function displayActiveRoom(room) {
       const mentorContainer = document.getElementById('activeRoom');
       const memberContainer = document.getElementById('memberActiveRoom');
+      
+      console.log('Mentor container:', mentorContainer);
+      console.log('Member container:', memberContainer);
+      console.log('Current user role:', window.app.user.role);
+      
       const activeContainer = window.app.user.role === 'mentor' ? mentorContainer : memberContainer;
       
-      if (!activeContainer) return;
+      console.log('Selected container:', activeContainer);
+      
+      if (!activeContainer) {
+        console.error('Active container not found!');
+        showNotification('Error: Container tidak ditemukan', 'error');
+        return;
+      }
+      
+      // Hide dashboard content first
+      hideDashboardContent();
       
       activeContainer.classList.remove('hidden');
       activeContainer.innerHTML = `
-        <div class="active-room-header">
-          <div class="room-info">
-            <h2>🏠 ${room.roomName}</h2>
-            <p>${room.roomDescription || 'Tidak ada deskripsi'}</p>
-            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">
-              Room ID: ${room.roomId} • Dibuat: ${formatDate(room.createdAt)}
-            </div>
-          </div>
-          <button class="btn btn-outline" onclick="hideActiveRoom()">
-            ← Kembali
-          </button>
-        </div>
-        
-        <div class="room-members">
-          <h3>👥 Anggota Room (${room.members.length}/${room.maxMembers})</h3>
-          <div class="members-grid" id="membersGrid">
-            ${room.members.map(member => `
-              <div class="member-card ${member.isOnline ? 'online' : 'offline'}">
-                <div class="member-avatar">${member.avatar}</div>
-                <div class="member-info">
-                  <h4>${member.fullName}</h4>
-                  <p>@${member.username}</p>
-                  <span class="role-badge role-${member.role}">${member.role === 'mentor' ? '👑 Mentor' : '🤝 Anggota'}</span>
-                </div>
-                <div class="member-status">
-                  ${member.isOnline ? '🟢 Online' : '🔴 Offline'}
-                </div>
-                ${member.joinMessage ? `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem; font-style: italic;">"${member.joinMessage}"</div>` : ''}
+        <div style="background: var(--bg-primary); border-radius: 16px; padding: 2rem; border: 1px solid var(--border-color);">
+          <div class="active-room-header">
+            <div class="room-info">
+              <h2>🏠 ${room.roomName}</h2>
+              <p>${room.roomDescription || 'Tidak ada deskripsi'}</p>
+              <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">
+                Room ID: ${room.roomId} • Dibuat: ${formatDate(room.createdAt)}
               </div>
-            `).join('')}
-          </div>
-        </div>
-        
-        <div class="room-content">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h3>📋 Manajemen Tugas</h3>
-            ${window.app.user.role === 'mentor' || room.settings.allowMemberAddTasks ? `
-              <button class="btn btn-primary" onclick="showAddTodoModal()">
-                ➕ Tambah Tugas
-              </button>
-            ` : ''}
+            </div>
+            <button class="btn btn-outline" onclick="hideActiveRoom()">
+              ← Kembali
+            </button>
           </div>
           
-          <div id="todoList">
-            ${renderTodoList(room.todos)}
+          <div class="room-members">
+            <h3>👥 Anggota Room (${room.members.length}/${room.maxMembers})</h3>
+            <div class="members-grid">
+              ${room.members.map(member => `
+                <div class="member-card ${member.isOnline ? 'online' : 'offline'}">
+                  <div class="member-avatar">${member.avatar}</div>
+                  <div class="member-info">
+                    <h4>${member.fullName}</h4>
+                    <p>@${member.username}</p>
+                    <span class="role-badge role-${member.role}">${member.role === 'mentor' ? '👑 Mentor' : '🤝 Anggota'}</span>
+                  </div>
+                  <div class="member-status">
+                    ${member.isOnline ? '🟢 Online' : '🔴 Offline'}
+                  </div>
+                  ${member.joinMessage ? `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem; font-style: italic;">"${member.joinMessage}"</div>` : ''}
+                </div>
+              `).join('')}
+            </div>
           </div>
-        </div>
-        
-        <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-          <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-            ${window.app.user.role === 'mentor' ? `
-              <button class="btn btn-outline" onclick="showRoomSettings('${room.roomId}')">
-                ⚙️ Pengaturan Room
+          
+          <div class="room-content" style="margin-top: 2rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+              <h3>📋 Manajemen Tugas</h3>
+              ${window.app.user.role === 'mentor' || room.settings.allowMemberAddTasks ? `
+                <button class="btn btn-primary" onclick="showAddTodoModal()">
+                  ➕ Tambah Tugas
+                </button>
+              ` : ''}
+            </div>
+            
+            <div id="todoList">
+              ${renderTodoList(room.todos)}
+            </div>
+          </div>
+          
+          <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+              ${window.app.user.role === 'mentor' ? `
+                <button class="btn btn-outline" onclick="showRoomSettings('${room.roomId}')">
+                  ⚙️ Pengaturan Room
+                </button>
+              ` : ''}
+              <button class="btn btn-outline" onclick="shareRoom('${room.roomId}')">
+                🔗 Share Room ID
               </button>
-            ` : ''}
-            <button class="btn btn-outline" onclick="shareRoom('${room.roomId}')">
-              🔗 Share Room ID
-            </button>
+            </div>
           </div>
         </div>
       `;
       
-      // Hide dashboard content
-      hideDashboardContent();
+      console.log('Room interface rendered successfully');
     }
 
     function hideActiveRoom() {
@@ -1677,22 +1806,29 @@
       
       window.app.currentRoom = null;
       showDashboardContent();
+      showNotification('Kembali ke dashboard', 'info');
     }
 
     function hideDashboardContent() {
-      // Hide dashboard buttons and content when in room
-      const dashboardContent = document.querySelectorAll('.card h2, .card > div[style*="grid"], .card > div[style*="text-align: center"]');
-      dashboardContent.forEach(el => {
-        el.style.display = 'none';
-      });
+      // Hide specific dashboard elements
+      const dashboardTitle = document.querySelector('.card h2');
+      const dashboardButtons = document.querySelector('.card div[style*="grid"]');
+      const dashboardLogout = document.querySelector('.card div[style*="text-align: center"]');
+      
+      if (dashboardTitle) dashboardTitle.style.display = 'none';
+      if (dashboardButtons) dashboardButtons.style.display = 'none';
+      if (dashboardLogout) dashboardLogout.style.display = 'none';
     }
 
     function showDashboardContent() {
-      // Show dashboard buttons and content when leaving room
-      const dashboardContent = document.querySelectorAll('.card h2, .card > div[style*="grid"], .card > div[style*="text-align: center"]');
-      dashboardContent.forEach(el => {
-        el.style.display = '';
-      });
+      // Show dashboard elements
+      const dashboardTitle = document.querySelector('.card h2');
+      const dashboardButtons = document.querySelector('.card div[style*="grid"]');
+      const dashboardLogout = document.querySelector('.card div[style*="text-align: center"]');
+      
+      if (dashboardTitle) dashboardTitle.style.display = '';
+      if (dashboardButtons) dashboardButtons.style.display = '';
+      if (dashboardLogout) dashboardLogout.style.display = '';
     }
 
     function renderTodoList(todos) {
@@ -1784,19 +1920,217 @@
 
     // Placeholder functions for todo management
     function showAddTodoModal() {
-      showNotification('Fitur tambah tugas akan tersedia di update berikutnya!', 'info');
+      if (!window.app.currentRoom) {
+        showNotification('Error: Tidak ada room aktif', 'error');
+        return;
+      }
+      
+      // Populate assignee dropdown with room members
+      populateAssigneeDropdown();
+      showModal('addTodoModal');
+    }
+
+    function populateAssigneeDropdown() {
+      const select = document.getElementById('todoAssigneeSelect');
+      if (!select || !window.app.currentRoom) return;
+      
+      // Keep the "not assigned" option and add members
+      const membersOptions = window.app.currentRoom.members.map(member => 
+        `<option value="${member.username}">${member.fullName} (@${member.username}) - ${member.role}</option>`
+      ).join('');
+      
+      select.innerHTML = `
+        <option value="">-- Belum di-assign --</option>
+        ${membersOptions}
+      `;
+    }
+
+    function createTodo() {
+      const form = document.getElementById('addTodoForm');
+      const formData = new FormData(form);
+      const isEditing = form.dataset.editingId;
+      
+      // Validate required fields
+      const title = formData.get('todoTitle').trim();
+      if (!title) {
+        showNotification('Judul tugas harus diisi!', 'error');
+        return;
+      }
+      
+      if (!window.app.currentRoom) {
+        showNotification('Error: Tidak ada room aktif', 'error');
+        return;
+      }
+      
+      try {
+        if (isEditing) {
+          // Update existing todo
+          const todo = window.app.currentRoom.todos.find(t => t.id === isEditing);
+          if (!todo) {
+            showNotification('Tugas tidak ditemukan!', 'error');
+            return;
+          }
+          
+          // Update todo properties
+          todo.title = title;
+          todo.description = formData.get('todoDescription').trim();
+          todo.priority = formData.get('todoPriority');
+          todo.deadline = formData.get('todoDeadline') || null;
+          todo.assignedTo = formData.get('todoAssignee') || null;
+          todo.category = formData.get('todoCategory');
+          todo.estimation = formData.get('todoEstimation');
+          todo.updatedAt = new Date().toISOString();
+          
+          showNotification(`Tugas "${title}" berhasil diupdate!`, 'success');
+          
+        } else {
+          // Create new todo
+          const newTodo = {
+            id: generateTodoId(),
+            title: title,
+            description: formData.get('todoDescription').trim(),
+            priority: formData.get('todoPriority'),
+            deadline: formData.get('todoDeadline') || null,
+            assignedTo: formData.get('todoAssignee') || null,
+            category: formData.get('todoCategory'),
+            estimation: formData.get('todoEstimation'),
+            completed: false,
+            createdBy: window.app.user.username,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            completedAt: null,
+            completedBy: null,
+            comments: []
+          };
+          
+          // Add todo to current room
+          if (!window.app.currentRoom.todos) {
+            window.app.currentRoom.todos = [];
+          }
+          window.app.currentRoom.todos.push(newTodo);
+          
+          showNotification(`Tugas "${title}" berhasil dibuat!`, 'success');
+          
+          // Notify assignment if assigned
+          if (newTodo.assignedTo && newTodo.assignedTo !== window.app.user.username) {
+            const assignedMember = window.app.currentRoom.members.find(m => m.username === newTodo.assignedTo);
+            if (assignedMember) {
+              showNotification(`Tugas di-assign ke ${assignedMember.fullName}`, 'info');
+            }
+          }
+        }
+        
+        // Save room to storage
+        saveRoom(window.app.currentRoom);
+        
+        // Update room display
+        updateTodoList();
+        
+        // Close modal
+        closeModal('addTodoModal');
+        
+      } catch (error) {
+        console.error('Error managing todo:', error);
+        showNotification('Gagal menyimpan tugas. Coba lagi.', 'error');
+      }
+    }
+
+    function generateTodoId() {
+      return 'todo-' + Math.random().toString(36).substring(2, 9) + '-' + Date.now().toString(36);
+    }
+
+    function updateTodoList() {
+      const todoListContainer = document.getElementById('todoList');
+      if (todoListContainer && window.app.currentRoom) {
+        todoListContainer.innerHTML = renderTodoList(window.app.currentRoom.todos);
+      }
     }
 
     function completeTodo(todoId) {
-      showNotification('Fitur complete tugas akan tersedia di update berikutnya!', 'info');
+      if (!window.app.currentRoom) return;
+      
+      const todo = window.app.currentRoom.todos.find(t => t.id === todoId);
+      if (!todo) {
+        showNotification('Tugas tidak ditemukan!', 'error');
+        return;
+      }
+      
+      // Check permission
+      const canComplete = todo.assignedTo === window.app.user.username || window.app.user.role === 'mentor';
+      if (!canComplete) {
+        showNotification('Anda tidak memiliki izin untuk menyelesaikan tugas ini!', 'error');
+        return;
+      }
+      
+      // Mark as completed
+      todo.completed = true;
+      todo.completedAt = new Date().toISOString();
+      todo.completedBy = window.app.user.username;
+      todo.updatedAt = new Date().toISOString();
+      
+      // Save and update
+      saveRoom(window.app.currentRoom);
+      updateTodoList();
+      
+      showNotification(`Tugas "${todo.title}" telah diselesaikan! 🎉`, 'success');
     }
 
     function editTodo(todoId) {
-      showNotification('Fitur edit tugas akan tersedia di update berikutnya!', 'info');
+      if (!window.app.currentRoom) return;
+      
+      const todo = window.app.currentRoom.todos.find(t => t.id === todoId);
+      if (!todo) {
+        showNotification('Tugas tidak ditemukan!', 'error');
+        return;
+      }
+      
+      // Pre-populate form with existing data
+      populateEditTodoForm(todo);
+      showModal('addTodoModal');
+      
+      // Change modal title and button text
+      const modalTitle = document.querySelector('#addTodoModal .modal-header h3');
+      const submitBtn = document.querySelector('#addTodoForm button[type="submit"]');
+      
+      if (modalTitle) modalTitle.textContent = '✏️ Edit Tugas';
+      if (submitBtn) submitBtn.innerHTML = '💾 Update Tugas';
+      
+      // Store todo ID for update
+      document.getElementById('addTodoForm').dataset.editingId = todoId;
+    }
+
+    function populateEditTodoForm(todo) {
+      const form = document.getElementById('addTodoForm');
+      if (!form) return;
+      
+      form.elements.todoTitle.value = todo.title;
+      form.elements.todoDescription.value = todo.description || '';
+      form.elements.todoPriority.value = todo.priority;
+      form.elements.todoDeadline.value = todo.deadline ? todo.deadline.split('T')[0] : '';
+      form.elements.todoAssignee.value = todo.assignedTo || '';
+      form.elements.todoCategory.value = todo.category;
+      form.elements.todoEstimation.value = todo.estimation;
     }
 
     function deleteTodo(todoId) {
-      showNotification('Fitur hapus tugas akan tersedia di update berikutnya!', 'info');
+      if (!window.app.currentRoom) return;
+      
+      const todo = window.app.currentRoom.todos.find(t => t.id === todoId);
+      if (!todo) {
+        showNotification('Tugas tidak ditemukan!', 'error');
+        return;
+      }
+      
+      if (confirm(`Apakah Anda yakin ingin menghapus tugas "${todo.title}"?\n\nTindakan ini tidak dapat dibatalkan.`)) {
+        // Remove todo from array
+        window.app.currentRoom.todos = window.app.currentRoom.todos.filter(t => t.id !== todoId);
+        
+        // Save and update
+        saveRoom(window.app.currentRoom);
+        updateTodoList();
+        
+        showNotification(`Tugas "${todo.title}" berhasil dihapus`, 'success');
+      }
     }
 
     function showRoomSettings(roomId) {

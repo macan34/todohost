@@ -1202,6 +1202,10 @@
           </button>
         </div>
 
+        <div id="activeRoom" class="hidden">
+          <!-- Active room content will be populated here -->
+        </div>
+
         <div style="text-align: center; margin-top: 2rem;">
           <button class="btn btn-outline" onclick="logout()">
             🚪 Keluar
@@ -1226,6 +1230,10 @@
           <button class="btn btn-success btn-block" onclick="showMyRoomsModal()">
             📚 Room Saya
           </button>
+        </div>
+
+        <div id="memberActiveRoom" class="hidden">
+          <!-- Active room content will be populated here -->
         </div>
 
         <div style="text-align: center; margin-top: 2rem;">
@@ -1672,22 +1680,18 @@
     }
 
     function hideDashboardContent() {
-      // Hide dashboard content when in room
-      const dashboardElements = document.querySelectorAll('.card h2, .card > div:not(#activeRoom):not(#memberActiveRoom)');
-      dashboardElements.forEach(el => {
-        if (!el.id || (el.id !== 'activeRoom' && el.id !== 'memberActiveRoom')) {
-          el.style.display = 'none';
-        }
+      // Hide dashboard buttons and content when in room
+      const dashboardContent = document.querySelectorAll('.card h2, .card > div[style*="grid"], .card > div[style*="text-align: center"]');
+      dashboardContent.forEach(el => {
+        el.style.display = 'none';
       });
     }
 
     function showDashboardContent() {
-      // Show dashboard content when leaving room
-      const dashboardElements = document.querySelectorAll('.card h2, .card > div:not(#activeRoom):not(#memberActiveRoom)');
-      dashboardElements.forEach(el => {
-        if (!el.id || (el.id !== 'activeRoom' && el.id !== 'memberActiveRoom')) {
-          el.style.display = '';
-        }
+      // Show dashboard buttons and content when leaving room
+      const dashboardContent = document.querySelectorAll('.card h2, .card > div[style*="grid"], .card > div[style*="text-align: center"]');
+      dashboardContent.forEach(el => {
+        el.style.display = '';
       });
     }
 

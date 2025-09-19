@@ -515,67 +515,104 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(0, 0, 0, 0.6);
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 10000;
+      backdrop-filter: blur(4px);
     }
 
     .modal-content {
       background: var(--bg-primary);
       border-radius: 16px;
       padding: 2rem;
-      max-width: 500px;
+      max-width: 600px;
       width: 90%;
-      max-height: 70vh;
+      max-height: 80vh;
       overflow-y: auto;
       box-shadow: var(--shadow-medium);
+      border: 1px solid var(--border-color);
+      position: relative;
+      animation: modalSlideIn 0.3s ease;
+    }
+
+    @keyframes modalSlideIn {
+      from { 
+        opacity: 0; 
+        transform: scale(0.9) translateY(-20px); 
+      }
+      to { 
+        opacity: 1; 
+        transform: scale(1) translateY(0); 
+      }
     }
 
     .modal-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 1rem;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      color: var(--text-primary);
+      font-size: 1.3rem;
     }
 
     .modal-close {
       background: var(--danger-color);
-      width: 30px;
-      height: 30px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 1.2rem;
       padding: 0;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: none;
+    }
+
+    .modal-close:hover {
+      background: #dc2626;
+      transform: scale(1.1);
     }
 
     .room-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 1rem;
+      padding: 1.25rem;
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      margin-bottom: 0.5rem;
+      margin-bottom: 1rem;
       cursor: pointer;
       transition: all 0.2s ease;
+      background: var(--bg-secondary);
     }
 
     .room-item:hover {
-      background: var(--bg-secondary);
-      transform: translateY(-1px);
+      background: var(--bg-primary);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-light);
+      border-color: #667eea;
     }
 
     .room-info h4 {
       margin: 0 0 0.25rem 0;
       color: var(--text-primary);
+      font-size: 1.1rem;
+      font-weight: 600;
     }
 
     .room-info small {
       color: var(--text-secondary);
+      line-height: 1.4;
     }
 
     @keyframes urgentPulse {
@@ -962,7 +999,10 @@
     }
 
     function closeRestoreModal() {
-      document.getElementById('restoreModal').classList.add('hidden');
+      const modal = document.getElementById('restoreModal');
+      if (modal) {
+        modal.classList.add('hidden');
+      }
       window.currentRestoreSession = null;
     }
 
@@ -970,25 +1010,36 @@
     function showSavedRooms() {
       const modal = document.getElementById('savedRoomsModal');
       const list = document.getElementById('savedRoomsList');
+      
+      if (!modal || !list) {
+        showNotification('Error: Modal elements not found', 'error');
+        return;
+      }
+      
       const sessions = window.storageManager.getSessions();
       
       list.innerHTML = '';
       
       if (Object.keys(sessions).length === 0) {
-        list.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Belum ada room yang tersimpan</p>';
+        list.innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            <p style="margin: 0;">📂 Belum ada room yang tersimpan</p>
+            <small>Room akan tersimpan otomatis saat Anda membuatnya</small>
+          </div>
+        `;
       } else {
         Object.entries(sessions).forEach(([roomId, session]) => {
           const item = document.createElement('div');
           item.className = 'room-item';
           item.innerHTML = `
             <div class="room-info">
-              <h4>${roomId}</h4>
-              <small>${session.userName} (${session.role}) - ${session.todos ? session.todos.length : 0} tugas</small>
-              <br><small>Terakhir: ${new Date(session.lastSaved).toLocaleString('id-ID')}</small>
+              <h4 style="margin: 0 0 0.25rem 0; color: var(--text-primary);">${roomId}</h4>
+              <small style="color: var(--text-secondary);">${session.userName} (${session.role}) - ${session.todos ? session.todos.length : 0} tugas</small>
+              <br><small style="color: var(--text-secondary);">Terakhir: ${new Date(session.lastSaved).toLocaleString('id-ID')}</small>
             </div>
-            <div>
-              <button onclick="loadSavedRoom('${roomId}')" style="margin-right: 0.5rem; padding: 0.5rem;">📂 Load</button>
-              <button onclick="deleteSavedRoom('${roomId}')" style="background: var(--danger-color); padding: 0.5rem;">🗑️</button>
+            <div style="display: flex; gap: 0.5rem;">
+              <button onclick="loadSavedRoom('${roomId}')" style="background: var(--success-color); padding: 0.5rem 0.75rem; font-size: 0.8rem; border-radius: 6px;">📂 Load</button>
+              <button onclick="deleteSavedRoom('${roomId}')" style="background: var(--danger-color); padding: 0.5rem 0.75rem; font-size: 0.8rem; border-radius: 6px;">🗑️</button>
             </div>
           `;
           list.appendChild(item);
@@ -996,6 +1047,15 @@
       }
       
       modal.classList.remove('hidden');
+      
+      // Add click outside to close functionality
+      setTimeout(() => {
+        modal.addEventListener('click', function(e) {
+          if (e.target === modal) {
+            closeSavedRoomsModal();
+          }
+        });
+      }, 100);
     }
 
     function loadSavedRoom(roomId) {
@@ -1004,11 +1064,13 @@
         window.currentRestoreSession = session;
         closeSavedRoomsModal();
         restoreSession();
+      } else {
+        showNotification('Session tidak ditemukan', 'error');
       }
     }
 
     function deleteSavedRoom(roomId) {
-      if (confirm(`Hapus room ${roomId} dari penyimpanan?`)) {
+      if (confirm(`Hapus room "${roomId}" dari penyimpanan?`)) {
         window.storageManager.deleteSession(roomId);
         showSavedRooms(); // Refresh list
         showNotification('Room berhasil dihapus', 'success');
@@ -1016,7 +1078,10 @@
     }
 
     function closeSavedRoomsModal() {
-      document.getElementById('savedRoomsModal').classList.add('hidden');
+      const modal = document.getElementById('savedRoomsModal');
+      if (modal) {
+        modal.classList.add('hidden');
+      }
     }
 
     // ===== AUTO-SAVE SYSTEM =====
@@ -1808,15 +1873,22 @@
     }
 
     // ===== EVENT HANDLERS =====
-    function handleModalClick(event, modalId) {
-      if (event.target.id === modalId) {
-        if (modalId === 'restoreModal') {
+    function handleKeyDown(event) {
+      // Close modals with Escape key
+      if (event.key === 'Escape') {
+        const restoreModal = document.getElementById('restoreModal');
+        const savedRoomsModal = document.getElementById('savedRoomsModal');
+        
+        if (restoreModal && !restoreModal.classList.contains('hidden')) {
           closeRestoreModal();
-        } else if (modalId === 'savedRoomsModal') {
+        } else if (savedRoomsModal && !savedRoomsModal.classList.contains('hidden')) {
           closeSavedRoomsModal();
         }
       }
     }
+
+    // Add keyboard event listener
+    document.addEventListener('keydown', handleKeyDown);
 
     // ===== INITIALIZATION =====
     // Enhanced DOM Ready Handling with multiple fallbacks
@@ -1836,11 +1908,15 @@
       }
     });
 
-    // Add event listeners for modals
+    // Add event listeners for modals with improved handling
     document.addEventListener('click', function(event) {
-      if (event.target.id === 'restoreModal') {
+      // Handle clicking outside modal to close
+      const restoreModal = document.getElementById('restoreModal');
+      const savedRoomsModal = document.getElementById('savedRoomsModal');
+      
+      if (event.target === restoreModal) {
         closeRestoreModal();
-      } else if (event.target.id === 'savedRoomsModal') {
+      } else if (event.target === savedRoomsModal) {
         closeSavedRoomsModal();
       }
     });

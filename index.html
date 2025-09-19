@@ -409,6 +409,122 @@
       font-size: 0.9rem;
     }
 
+    /* Room Cards */
+    .rooms-list {
+      padding: 1.5rem 2rem;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+
+    .room-card {
+      background: var(--bg-secondary);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      border: 1px solid var(--border-color);
+      transition: all 0.3s ease;
+    }
+
+    .room-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-medium);
+      border-color: #667eea;
+    }
+
+    .room-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+    }
+
+    .room-card-header h3 {
+      margin: 0 0 0.25rem 0;
+      color: var(--text-primary);
+      font-size: 1.2rem;
+    }
+
+    .room-badges {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      padding: 0.25rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-owner {
+      background: rgba(139, 92, 246, 0.1);
+      color: var(--mentor-color);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+
+    .badge-role {
+      background: rgba(6, 182, 212, 0.1);
+      color: var(--member-color);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+    }
+
+    .room-description {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+
+    .room-stats {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+
+    .stat-icon {
+      font-size: 1rem;
+    }
+
+    .room-card-actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .room-card-actions .btn {
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+      flex: 1;
+      min-width: 100px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 2rem;
+      color: var(--text-secondary);
+    }
+
+    .empty-state h3 {
+      color: var(--text-primary);
+      margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+      margin: 0;
+      line-height: 1.5;
+    }
+
     .user-profile {
       display: flex;
       align-items: center;
@@ -730,6 +846,26 @@
     </div>
   </div>
 
+  <!-- My Rooms Modal -->
+  <div id="myRoomsModal" class="modal" onclick="handleModalClick(event, 'myRoomsModal')">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h3>📚 Room Saya</h3>
+        <button class="modal-close" onclick="closeModal('myRoomsModal')">×</button>
+      </div>
+      
+      <div id="myRoomsList" class="rooms-list">
+        <!-- Rooms will be populated by JavaScript -->
+      </div>
+      
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal('myRoomsModal')">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="container">
     <!-- Login Page -->
     <div id="loginPage" class="page active">
@@ -851,7 +987,7 @@
           <button class="btn btn-primary btn-block" onclick="showCreateRoomModal()">
             🏠 Buat Room Baru
           </button>
-          <button class="btn btn-success btn-block" onclick="alert('Feature coming soon!')">
+          <button class="btn btn-success btn-block" onclick="showMyRoomsModal()">
             📚 Room Saya
           </button>
         </div>
@@ -877,7 +1013,7 @@
           <button class="btn btn-primary btn-block" onclick="showJoinRoomModal()">
             🔗 Gabung ke Room
           </button>
-          <button class="btn btn-success btn-block" onclick="alert('Feature coming soon!')">
+          <button class="btn btn-success btn-block" onclick="showMyRoomsModal()">
             📚 Room Saya
           </button>
         </div>
@@ -1045,6 +1181,11 @@
       showModal('joinRoomModal');
     }
 
+    function showMyRoomsModal() {
+      loadMyRooms();
+      showModal('myRoomsModal');
+    }
+
     function showModal(modalId) {
       const modal = document.getElementById(modalId);
       if (modal) {
@@ -1074,6 +1215,227 @@
     function handleModalClick(event, modalId) {
       if (event.target.id === modalId) {
         closeModal(modalId);
+      }
+    }
+
+    // Room Management Functions
+    function loadMyRooms() {
+      const container = document.getElementById('myRoomsList');
+      if (!container) return;
+      
+      try {
+        const allRooms = getAllRooms();
+        const myRooms = allRooms.filter(room => 
+          room.members.some(member => member.username === window.app.user.username)
+        );
+        
+        container.innerHTML = '';
+        
+        if (myRooms.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div style="font-size: 3rem; margin-bottom: 1rem;">🏠</div>
+              <h3>Belum Ada Room</h3>
+              <p>Anda belum bergabung atau membuat room apapun.</p>
+              <p style="margin-top: 1rem;">
+                ${window.app.user.role === 'mentor' ? 
+                  'Klik "Buat Room Baru" untuk membuat room pertama Anda!' : 
+                  'Gunakan "Gabung ke Room" untuk bergabung dengan tim!'
+                }
+              </p>
+            </div>
+          `;
+          return;
+        }
+        
+        myRooms.forEach(room => {
+          const roomElement = createRoomCard(room);
+          container.appendChild(roomElement);
+        });
+        
+      } catch (error) {
+        console.error('Error loading rooms:', error);
+        container.innerHTML = `
+          <div class="empty-state">
+            <div style="font-size: 2rem; margin-bottom: 1rem;">❌</div>
+            <h3>Error Loading Rooms</h3>
+            <p>Terjadi kesalahan saat memuat room.</p>
+          </div>
+        `;
+      }
+    }
+
+    function createRoomCard(room) {
+      const div = document.createElement('div');
+      div.className = 'room-card';
+      
+      const myMember = room.members.find(m => m.username === window.app.user.username);
+      const isOwner = room.createdBy === window.app.user.username;
+      const onlineMembers = room.members.filter(m => m.isOnline).length;
+      
+      div.innerHTML = `
+        <div class="room-card-header">
+          <div>
+            <h3>${room.roomName}</h3>
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
+              ID: ${room.roomId}
+            </div>
+          </div>
+          <div class="room-badges">
+            ${isOwner ? '<span class="badge badge-owner">👑 Owner</span>' : ''}
+            <span class="badge badge-role">${myMember.role}</span>
+          </div>
+        </div>
+        
+        <div class="room-description">${room.roomDescription || 'Tidak ada deskripsi'}</div>
+        
+        <div class="room-stats">
+          <div class="stat-item">
+            <span class="stat-icon">👥</span>
+            <span>${onlineMembers}/${room.members.length} online</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-icon">📋</span>
+            <span>${room.todos.length} tugas</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-icon">🗂️</span>
+            <span>${getTypeIcon(room.roomType)} ${room.roomType}</span>
+          </div>
+        </div>
+        
+        <div class="room-card-actions">
+          <button class="btn btn-primary" onclick="enterRoom('${room.roomId}')">
+            🚪 Masuk Room
+          </button>
+          ${isOwner ? `
+            <button class="btn btn-outline" onclick="shareRoom('${room.roomId}')">
+              🔗 Share
+            </button>
+            <button class="btn btn-danger" onclick="deleteRoom('${room.roomId}')">
+              🗑️ Hapus
+            </button>
+          ` : `
+            <button class="btn btn-warning" onclick="leaveRoom('${room.roomId}')">
+              🚪 Keluar
+            </button>
+          `}
+        </div>
+      `;
+      
+      return div;
+    }
+
+    function getTypeIcon(type) {
+      const icons = {
+        project: '🎯',
+        team: '👥',
+        study: '📚',
+        personal: '👤'
+      };
+      return icons[type] || '📁';
+    }
+
+    function enterRoom(roomId) {
+      try {
+        const room = getRoom(roomId);
+        if (room) {
+          window.app.currentRoom = room;
+          closeModal('myRoomsModal');
+          showNotification(`Masuk ke room "${room.roomName}"`, 'success');
+          
+          // Here you can add navigation to room detail page
+          console.log('Entering room:', room);
+          
+        } else {
+          showNotification('Room tidak ditemukan!', 'error');
+        }
+      } catch (error) {
+        console.error('Error entering room:', error);
+        showNotification('Gagal masuk ke room', 'error');
+      }
+    }
+
+    function shareRoom(roomId) {
+      try {
+        // Copy room ID to clipboard
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(roomId).then(() => {
+            showNotification('Room ID berhasil disalin!', 'success');
+          }).catch(() => {
+            fallbackCopyTextToClipboard(roomId);
+          });
+        } else {
+          fallbackCopyTextToClipboard(roomId);
+        }
+      } catch (error) {
+        console.error('Error sharing room:', error);
+        showNotification('Gagal menyalin Room ID', 'error');
+      }
+    }
+
+    function fallbackCopyTextToClipboard(text) {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      try {
+        document.execCommand('copy');
+        showNotification('Room ID berhasil disalin!', 'success');
+      } catch (err) {
+        console.error('Fallback copy failed:', err);
+        showNotification('Tidak dapat menyalin Room ID. Copy manual: ' + text, 'warning');
+      }
+      
+      document.body.removeChild(textArea);
+    }
+
+    function deleteRoom(roomId) {
+      const room = getRoom(roomId);
+      if (!room) return;
+      
+      if (confirm(`Apakah Anda yakin ingin menghapus room "${room.roomName}"?\n\nRoom dan semua data di dalamnya akan hilang permanen.`)) {
+        try {
+          deleteRoomFromStorage(roomId);
+          
+          if (window.app.currentRoom && window.app.currentRoom.roomId === roomId) {
+            window.app.currentRoom = null;
+          }
+          
+          loadMyRooms(); // Refresh list
+          showNotification(`Room "${room.roomName}" berhasil dihapus`, 'success');
+        } catch (error) {
+          console.error('Error deleting room:', error);
+          showNotification('Gagal menghapus room', 'error');
+        }
+      }
+    }
+
+    function leaveRoom(roomId) {
+      const room = getRoom(roomId);
+      if (!room) return;
+      
+      if (confirm(`Apakah Anda yakin ingin keluar dari room "${room.roomName}"?`)) {
+        try {
+          // Remove user from room members
+          room.members = room.members.filter(m => m.username !== window.app.user.username);
+          saveRoom(room);
+          
+          if (window.app.currentRoom && window.app.currentRoom.roomId === roomId) {
+            window.app.currentRoom = null;
+          }
+          
+          loadMyRooms(); // Refresh list
+          showNotification(`Berhasil keluar dari room "${room.roomName}"`, 'info');
+        } catch (error) {
+          console.error('Error leaving room:', error);
+          showNotification('Gagal keluar dari room', 'error');
+        }
       }
     }
 

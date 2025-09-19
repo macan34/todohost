@@ -525,6 +525,216 @@
       line-height: 1.5;
     }
 
+    /* Active Room Display */
+    .active-room-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid var(--border-color);
+    }
+
+    .room-info h2 {
+      margin: 0 0 0.5rem 0;
+      color: var(--text-primary);
+    }
+
+    .room-info p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+    }
+
+    .room-members {
+      margin-bottom: 2rem;
+    }
+
+    .room-members h3 {
+      color: var(--text-primary);
+      margin-bottom: 1rem;
+      font-size: 1.1rem;
+    }
+
+    .members-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
+    .member-card {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 1rem;
+      border: 2px solid var(--border-color);
+      transition: all 0.2s ease;
+    }
+
+    .member-card.online {
+      border-color: var(--success-color);
+      background: rgba(16, 185, 129, 0.05);
+    }
+
+    .member-card.offline {
+      border-color: var(--border-color);
+      opacity: 0.7;
+    }
+
+    .member-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-light);
+    }
+
+    .member-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--primary-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      color: white;
+      margin-bottom: 0.75rem;
+    }
+
+    .member-info h4 {
+      margin: 0 0 0.25rem 0;
+      color: var(--text-primary);
+      font-size: 1rem;
+    }
+
+    .member-info p {
+      margin: 0 0 0.5rem 0;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+
+    .member-status {
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-top: 0.5rem;
+    }
+
+    .room-content {
+      background: var(--bg-secondary);
+      border-radius: 16px;
+      padding: 1.5rem;
+      border: 1px solid var(--border-color);
+    }
+
+    .room-content h3 {
+      margin: 0 0 1rem 0;
+      color: var(--text-primary);
+    }
+
+    /* Todo Cards */
+    .todo-card {
+      background: var(--bg-primary);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      border: 1px solid var(--border-color);
+      transition: all 0.3s ease;
+    }
+
+    .todo-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-light);
+      border-color: #667eea;
+    }
+
+    .todo-card.completed {
+      opacity: 0.7;
+      background: rgba(16, 185, 129, 0.05);
+      border-color: var(--success-color);
+    }
+
+    .todo-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+    }
+
+    .todo-info h4 {
+      margin: 0 0 0.5rem 0;
+      color: var(--text-primary);
+      font-size: 1.1rem;
+    }
+
+    .todo-info p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+
+    .todo-priority {
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .priority-low {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--success-color);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .priority-medium {
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--warning-color);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .priority-high {
+      background: rgba(249, 115, 22, 0.1);
+      color: #f97316;
+      border: 1px solid rgba(249, 115, 22, 0.3);
+    }
+
+    .priority-urgent {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--danger-color);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .todo-details {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .todo-assignee,
+    .todo-deadline {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .todo-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .btn-sm {
+      padding: 0.5rem 1rem;
+      font-size: 0.8rem;
+      min-height: auto;
+    }
+
+    #activeRoom,
+    #memberActiveRoom {
+      margin-top: 2rem;
+    }
+
     .user-profile {
       display: flex;
       align-items: center;
@@ -1342,10 +1552,18 @@
         if (room) {
           window.app.currentRoom = room;
           closeModal('myRoomsModal');
-          showNotification(`Masuk ke room "${room.roomName}"`, 'success');
           
-          // Here you can add navigation to room detail page
-          console.log('Entering room:', room);
+          // Update member status to online
+          const myMember = room.members.find(m => m.username === window.app.user.username);
+          if (myMember) {
+            myMember.isOnline = true;
+            myMember.lastSeen = new Date().toISOString();
+            saveRoom(room);
+          }
+          
+          // Show room interface
+          displayActiveRoom(room);
+          showNotification(`Masuk ke room "${room.roomName}"`, 'success');
           
         } else {
           showNotification('Room tidak ditemukan!', 'error');
@@ -1354,6 +1572,231 @@
         console.error('Error entering room:', error);
         showNotification('Gagal masuk ke room', 'error');
       }
+    }
+
+    // Room Display Functions
+    function displayActiveRoom(room) {
+      const mentorContainer = document.getElementById('activeRoom');
+      const memberContainer = document.getElementById('memberActiveRoom');
+      const activeContainer = window.app.user.role === 'mentor' ? mentorContainer : memberContainer;
+      
+      if (!activeContainer) return;
+      
+      activeContainer.classList.remove('hidden');
+      activeContainer.innerHTML = `
+        <div class="active-room-header">
+          <div class="room-info">
+            <h2>🏠 ${room.roomName}</h2>
+            <p>${room.roomDescription || 'Tidak ada deskripsi'}</p>
+            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">
+              Room ID: ${room.roomId} • Dibuat: ${formatDate(room.createdAt)}
+            </div>
+          </div>
+          <button class="btn btn-outline" onclick="hideActiveRoom()">
+            ← Kembali
+          </button>
+        </div>
+        
+        <div class="room-members">
+          <h3>👥 Anggota Room (${room.members.length}/${room.maxMembers})</h3>
+          <div class="members-grid" id="membersGrid">
+            ${room.members.map(member => `
+              <div class="member-card ${member.isOnline ? 'online' : 'offline'}">
+                <div class="member-avatar">${member.avatar}</div>
+                <div class="member-info">
+                  <h4>${member.fullName}</h4>
+                  <p>@${member.username}</p>
+                  <span class="role-badge role-${member.role}">${member.role === 'mentor' ? '👑 Mentor' : '🤝 Anggota'}</span>
+                </div>
+                <div class="member-status">
+                  ${member.isOnline ? '🟢 Online' : '🔴 Offline'}
+                </div>
+                ${member.joinMessage ? `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem; font-style: italic;">"${member.joinMessage}"</div>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        
+        <div class="room-content">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3>📋 Manajemen Tugas</h3>
+            ${window.app.user.role === 'mentor' || room.settings.allowMemberAddTasks ? `
+              <button class="btn btn-primary" onclick="showAddTodoModal()">
+                ➕ Tambah Tugas
+              </button>
+            ` : ''}
+          </div>
+          
+          <div id="todoList">
+            ${renderTodoList(room.todos)}
+          </div>
+        </div>
+        
+        <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            ${window.app.user.role === 'mentor' ? `
+              <button class="btn btn-outline" onclick="showRoomSettings('${room.roomId}')">
+                ⚙️ Pengaturan Room
+              </button>
+            ` : ''}
+            <button class="btn btn-outline" onclick="shareRoom('${room.roomId}')">
+              🔗 Share Room ID
+            </button>
+          </div>
+        </div>
+      `;
+      
+      // Hide dashboard content
+      hideDashboardContent();
+    }
+
+    function hideActiveRoom() {
+      const mentorContainer = document.getElementById('activeRoom');
+      const memberContainer = document.getElementById('memberActiveRoom');
+      
+      if (mentorContainer) mentorContainer.classList.add('hidden');
+      if (memberContainer) memberContainer.classList.add('hidden');
+      
+      // Update member status to offline
+      if (window.app.currentRoom) {
+        const myMember = window.app.currentRoom.members.find(m => m.username === window.app.user.username);
+        if (myMember) {
+          myMember.isOnline = false;
+          myMember.lastSeen = new Date().toISOString();
+          saveRoom(window.app.currentRoom);
+        }
+      }
+      
+      window.app.currentRoom = null;
+      showDashboardContent();
+    }
+
+    function hideDashboardContent() {
+      // Hide dashboard content when in room
+      const dashboardElements = document.querySelectorAll('.card h2, .card > div:not(#activeRoom):not(#memberActiveRoom)');
+      dashboardElements.forEach(el => {
+        if (!el.id || (el.id !== 'activeRoom' && el.id !== 'memberActiveRoom')) {
+          el.style.display = 'none';
+        }
+      });
+    }
+
+    function showDashboardContent() {
+      // Show dashboard content when leaving room
+      const dashboardElements = document.querySelectorAll('.card h2, .card > div:not(#activeRoom):not(#memberActiveRoom)');
+      dashboardElements.forEach(el => {
+        if (!el.id || (el.id !== 'activeRoom' && el.id !== 'memberActiveRoom')) {
+          el.style.display = '';
+        }
+      });
+    }
+
+    function renderTodoList(todos) {
+      if (!todos || todos.length === 0) {
+        return `
+          <div class="empty-state">
+            <div style="font-size: 2.5rem; margin-bottom: 1rem;">📝</div>
+            <h4>Belum Ada Tugas</h4>
+            <p>Room ini belum memiliki tugas apapun.</p>
+            ${window.app.user.role === 'mentor' ? 
+              '<p>Klik "Tambah Tugas" untuk membuat tugas pertama!</p>' : 
+              '<p>Tunggu mentor menambahkan tugas untuk tim.</p>'
+            }
+          </div>
+        `;
+      }
+
+      return todos.map(todo => `
+        <div class="todo-card ${todo.completed ? 'completed' : ''}" data-todo-id="${todo.id}">
+          <div class="todo-header">
+            <div class="todo-info">
+              <h4>${todo.title}</h4>
+              <p>${todo.description || 'Tidak ada deskripsi'}</p>
+            </div>
+            <div class="todo-priority priority-${todo.priority}">
+              ${getPriorityIcon(todo.priority)} ${todo.priority.toUpperCase()}
+            </div>
+          </div>
+          
+          <div class="todo-details">
+            <div class="todo-assignee">
+              ${todo.assignedTo ? `👤 ${todo.assignedTo}` : '👥 Belum di-assign'}
+            </div>
+            <div class="todo-deadline">
+              ${todo.deadline ? `⏰ ${formatDate(todo.deadline)}` : '📅 Tanpa deadline'}
+            </div>
+          </div>
+          
+          <div class="todo-actions">
+            ${!todo.completed && (todo.assignedTo === window.app.user.username || window.app.user.role === 'mentor') ? `
+              <button class="btn btn-success btn-sm" onclick="completeTodo('${todo.id}')">
+                ✓ Selesai
+              </button>
+            ` : ''}
+            ${window.app.user.role === 'mentor' ? `
+              <button class="btn btn-outline btn-sm" onclick="editTodo('${todo.id}')">
+                ✏️ Edit
+              </button>
+              <button class="btn btn-danger btn-sm" onclick="deleteTodo('${todo.id}')">
+                🗑️ Hapus
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function getPriorityIcon(priority) {
+      const icons = {
+        low: '🟢',
+        medium: '🟡',
+        high: '🟠',
+        urgent: '🔴'
+      };
+      return icons[priority] || '⚪';
+    }
+
+    function formatDate(dateString) {
+      try {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diff = now - date;
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        
+        if (days === 0) return 'Hari ini';
+        if (days === 1) return 'Kemarin';
+        if (days === -1) return 'Besok';
+        if (days < 7 && days > -7) return `${Math.abs(days)} hari ${days > 0 ? 'lalu' : 'lagi'}`;
+        
+        return date.toLocaleDateString('id-ID', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: 'numeric' 
+        });
+      } catch (error) {
+        return 'Tanggal tidak valid';
+      }
+    }
+
+    // Placeholder functions for todo management
+    function showAddTodoModal() {
+      showNotification('Fitur tambah tugas akan tersedia di update berikutnya!', 'info');
+    }
+
+    function completeTodo(todoId) {
+      showNotification('Fitur complete tugas akan tersedia di update berikutnya!', 'info');
+    }
+
+    function editTodo(todoId) {
+      showNotification('Fitur edit tugas akan tersedia di update berikutnya!', 'info');
+    }
+
+    function deleteTodo(todoId) {
+      showNotification('Fitur hapus tugas akan tersedia di update berikutnya!', 'info');
+    }
+
+    function showRoomSettings(roomId) {
+      showNotification('Fitur pengaturan room akan tersedia di update berikutnya!', 'info');
     }
 
     function shareRoom(roomId) {
@@ -1583,6 +2026,16 @@
       } catch (error) {
         console.error('Error loading rooms:', error);
         return [];
+      }
+    }
+
+    function deleteRoomFromStorage(roomId) {
+      try {
+        const rooms = getAllRooms().filter(r => r.roomId !== roomId);
+        localStorage.setItem('todopro_rooms', JSON.stringify(rooms));
+      } catch (error) {
+        console.error('Error deleting room:', error);
+        throw error;
       }
     }
 

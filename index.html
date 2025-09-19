@@ -462,8 +462,8 @@
       color: white;
     }
 
-    .hidden { 
-      display: none; 
+    .modal.hidden {
+      display: none !important;
     }
 
     .auth-buttons {
@@ -1008,72 +1008,148 @@
 
     // ===== SAVED ROOMS MANAGEMENT =====
     function showSavedRooms() {
+      console.log('showSavedRooms called');
+      
       const modal = document.getElementById('savedRoomsModal');
       const list = document.getElementById('savedRoomsList');
       
-      if (!modal || !list) {
-        showNotification('Error: Modal elements not found', 'error');
+      if (!modal) {
+        console.error('Modal savedRoomsModal not found');
+        showNotification('Error: Modal tidak ditemukan', 'error');
+        return;
+      }
+      
+      if (!list) {
+        console.error('Element savedRoomsList not found');
+        showNotification('Error: List element tidak ditemukan', 'error');
         return;
       }
       
       const sessions = window.storageManager.getSessions();
+      console.log('Sessions found:', sessions);
       
+      // Clear previous content
       list.innerHTML = '';
       
       if (Object.keys(sessions).length === 0) {
         list.innerHTML = `
-          <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-            <p style="margin: 0;">📂 Belum ada room yang tersimpan</p>
-            <small>Room akan tersimpan otomatis saat Anda membuatnya</small>
+          <div style="text-align: center; padding: 3rem 2rem; color: var(--text-secondary);">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">📂</div>
+            <h3 style="margin: 0 0 0.5rem 0; color: var(--text-primary);">Belum Ada Room</h3>
+            <p style="margin: 0; line-height: 1.5;">Room akan tersimpan otomatis saat Anda membuat atau bergabung ke room.</p>
           </div>
         `;
+        console.log('No sessions found, showing empty state');
       } else {
-        Object.entries(sessions).forEach(([roomId, session]) => {
+        console.log('Creating room items for', Object.keys(sessions).length, 'sessions');
+        
+        Object.entries(sessions).forEach(([roomId, session], index) => {
+          console.log(`Creating item ${index + 1}:`, roomId, session);
+          
           const item = document.createElement('div');
           item.className = 'room-item';
+          item.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            background: var(--bg-secondary);
+            transition: all 0.2s ease;
+          `;
+          
           item.innerHTML = `
-            <div class="room-info">
-              <h4 style="margin: 0 0 0.25rem 0; color: var(--text-primary);">${roomId}</h4>
-              <small style="color: var(--text-secondary);">${session.userName} (${session.role}) - ${session.todos ? session.todos.length : 0} tugas</small>
-              <br><small style="color: var(--text-secondary);">Terakhir: ${new Date(session.lastSaved).toLocaleString('id-ID')}</small>
+            <div class="room-info" style="flex: 1;">
+              <h4 style="margin: 0 0 0.5rem 0; color: var(--text-primary); font-size: 1.1rem; font-weight: 600;">${roomId}</h4>
+              <div style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4;">
+                <div>👤 ${session.userName || 'Unknown'} (${session.role || 'Unknown'})</div>
+                <div>📋 ${session.todos ? session.todos.length : 0} tugas</div>
+                <div>🕒 ${new Date(session.lastSaved).toLocaleString('id-ID')}</div>
+              </div>
             </div>
-            <div style="display: flex; gap: 0.5rem;">
-              <button onclick="loadSavedRoom('${roomId}')" style="background: var(--success-color); padding: 0.5rem 0.75rem; font-size: 0.8rem; border-radius: 6px;">📂 Load</button>
-              <button onclick="deleteSavedRoom('${roomId}')" style="background: var(--danger-color); padding: 0.5rem 0.75rem; font-size: 0.8rem; border-radius: 6px;">🗑️</button>
+            <div style="display: flex; gap: 0.5rem; flex-shrink: 0;">
+              <button 
+                onclick="loadSavedRoom('${roomId}')" 
+                style="background: var(--success-color); color: white; border: none; padding: 0.6rem 1rem; font-size: 0.85rem; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 0.25rem;"
+                onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(16, 185, 129, 0.3)'"
+                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'"
+              >
+                📂 Load
+              </button>
+              <button 
+                onclick="deleteSavedRoom('${roomId}')" 
+                style="background: var(--danger-color); color: white; border: none; padding: 0.6rem 1rem; font-size: 0.85rem; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 0.25rem;"
+                onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(239, 68, 68, 0.3)'"
+                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'"
+              >
+                🗑️ Hapus
+              </button>
             </div>
           `;
+          
+          // Add hover effect to item
+          item.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-2px)';
+            this.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
+            this.style.borderColor = '#667eea';
+          });
+          
+          item.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = 'none';
+            this.style.borderColor = 'var(--border-color)';
+          });
+          
           list.appendChild(item);
+          console.log(`Item ${index + 1} added to list`);
         });
       }
       
+      // Show modal
       modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+      console.log('Modal should now be visible');
       
-      // Add click outside to close functionality
+      // Add event listeners after a short delay
       setTimeout(() => {
-        modal.addEventListener('click', function(e) {
+        // Click outside to close
+        const handleModalClick = function(e) {
           if (e.target === modal) {
             closeSavedRoomsModal();
+            modal.removeEventListener('click', handleModalClick);
           }
-        });
+        };
+        modal.addEventListener('click', handleModalClick);
+        
+        console.log('Event listeners added');
       }, 100);
     }
 
     function loadSavedRoom(roomId) {
+      console.log('Loading room:', roomId);
       const session = window.storageManager.getSession(roomId);
       if (session) {
         window.currentRestoreSession = session;
         closeSavedRoomsModal();
         restoreSession();
+        showNotification(`Room ${roomId} berhasil dimuat`, 'success');
       } else {
         showNotification('Session tidak ditemukan', 'error');
       }
     }
 
     function deleteSavedRoom(roomId) {
-      if (confirm(`Hapus room "${roomId}" dari penyimpanan?`)) {
-        window.storageManager.deleteSession(roomId);
-        showSavedRooms(); // Refresh list
-        showNotification('Room berhasil dihapus', 'success');
+      if (confirm(`Apakah Anda yakin ingin menghapus room "${roomId}" dari penyimpanan?\n\nData room ini akan hilang permanen.`)) {
+        try {
+          window.storageManager.deleteSession(roomId);
+          showSavedRooms(); // Refresh list
+          showNotification(`Room "${roomId}" berhasil dihapus`, 'success');
+        } catch (error) {
+          console.error('Error deleting room:', error);
+          showNotification('Gagal menghapus room', 'error');
+        }
       }
     }
 
@@ -1081,6 +1157,8 @@
       const modal = document.getElementById('savedRoomsModal');
       if (modal) {
         modal.classList.add('hidden');
+        modal.style.display = 'none';
+        console.log('Modal closed');
       }
     }
 

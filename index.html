@@ -2066,7 +2066,6 @@
       }
     }
 
-    // Room Display Functions
     function displayActiveRoom(room) {
       const mentorContainer = document.getElementById('activeRoom');
       const memberContainer = document.getElementById('memberActiveRoom');
@@ -2088,6 +2087,9 @@
       // Hide dashboard content first
       hideDashboardContent();
       
+      // Start auto-refresh for real-time updates
+      startRoomAutoRefresh(room.roomId);
+      
       activeContainer.classList.remove('hidden');
       activeContainer.innerHTML = `
         <div style="background: var(--bg-primary); border-radius: 16px; padding: 2rem; border: 1px solid var(--border-color);">
@@ -2097,36 +2099,29 @@
               <p>${room.roomDescription || 'Tidak ada deskripsi'}</p>
               <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">
                 Room ID: ${room.roomId} • Dibuat: ${formatDate(room.createdAt)}
+                <span id="lastUpdated" style="margin-left: 1rem; color: var(--success-color);"></span>
               </div>
             </div>
-            <button class="btn btn-outline" onclick="hideActiveRoom()">
-              ← Kembali
-            </button>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn btn-outline btn-sm" onclick="refreshRoomData()" title="Refresh data">
+                🔄 Sync
+              </button>
+              <button class="btn btn-outline" onclick="hideActiveRoom()">
+                ← Kembali
+              </button>
+            </div>
           </div>
           
           <div class="room-members">
             <h3>👥 Anggota Room (${room.members.length}/${room.maxMembers})</h3>
-            <div class="members-grid">
-              ${room.members.map(member => `
-                <div class="member-card ${member.isOnline ? 'online' : 'offline'}">
-                  <div class="member-avatar">${member.avatar}</div>
-                  <div class="member-info">
-                    <h4>${member.fullName}</h4>
-                    <p>@${member.username}</p>
-                    <span class="role-badge role-${member.role}">${member.role === 'mentor' ? '👑 Mentor' : '🤝 Anggota'}</span>
-                  </div>
-                  <div class="member-status">
-                    ${member.isOnline ? '🟢 Online' : '🔴 Offline'}
-                  </div>
-                  ${member.joinMessage ? `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem; font-style: italic;">"${member.joinMessage}"</div>` : ''}
-                </div>
-              `).join('')}
+            <div class="members-grid" id="currentMembersGrid">
+              ${renderMemberCards(room.members)}
             </div>
           </div>
           
           <div class="room-content" style="margin-top: 2rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-              <h3>📋 Manajemen Tugas</h3>
+              <h3>📋 Manajemen Tugas (${room.todos.length})</h3>
               ${window.app.user.role === 'mentor' || room.settings.allowMemberAddTasks ? `
                 <button class="btn btn-primary" onclick="showAddTodoModal()">
                   ➕ Tambah Tugas
@@ -2149,6 +2144,9 @@
               <button class="btn btn-outline" onclick="shareRoom('${room.roomId}')">
                 🔗 Share Room ID
               </button>
+              <small style="color: var(--text-secondary); align-self: center;">
+                Auto-refresh: <span id="autoRefreshStatus">Aktif</span>
+              </small>
             </div>
           </div>
         </div>
@@ -2157,12 +2155,181 @@
       console.log('Room interface rendered successfully');
     }
 
+    function renderMemberCards(members) {
+      return members.map(member => `
+        <div class="member-card ${member.isOnline ? 'online' : 'offline'}">
+          <div class="member-avatar">${member.avatar}</div>
+          <div class="member-info">
+            <h4>${member.fullName}</h4>
+            <p>@${member.username}</p>
+            <span class="role-badge role-${member.role}">${member.role === 'mentor' ? '👑 Mentor' : '🤝 Anggota'}</span>
+          </div>
+          <div class="member-status">
+            ${member.isOnline ? '🟢 Online' : '🔴 Offline'}
+          </div>
+          ${member.joinMessage ? `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem; font-style: italic;">"${member.joinMessage}"</div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    // Auto-refresh system
+    let refreshInterval;
+    
+    function startRoomAutoRefresh(roomId) {
+      // Clear any existing interval
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+      
+      // Refresh every 10 seconds
+      refreshInterval = setInterval(() => {
+        refreshRoomDataSilently(roomId);
+      }, 10000);
+      
+      console.log('Auto-refresh started for room:', roomId);
+    }
+
+    function stopRoomAutoRefresh() {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+        console.log('Auto-refresh stopped');
+      }
+    }
+
+    function refreshRoomData() {
+      if (!window.app.currentRoom) {
+        showNotification('Tidak ada room aktif', 'warning');
+        return;
+      }
+      
+      const loadingNotif = showNotification('Menyinkronkan data room...', 'loading');
+      
+      try {
+        // In a real app, this would fetch from server
+        // For now, we'll try to get updated data from URL if available
+        const roomId = window.app.currentRoom.roomId;
+        
+        // Check if there's updated room data in localStorage from other operations
+        const latestRoomData = getRoom(roomId);
+        
+        if (latestRoomData) {
+          // Update current room
+          window.app.currentRoom = latestRoomData;
+          
+          // Update display
+          updateRoomInterface(latestRoomData);
+          
+          removeNotification(loadingNotif);
+          showNotification('Data room berhasil disinkronkan!', 'success');
+          
+          // Update last sync time
+          updateLastSyncTime();
+          
+        } else {
+          removeNotification(loadingNotif);
+          showNotification('Room tidak ditemukan di storage lokal', 'warning');
+        }
+        
+      } catch (error) {
+        console.error('Error refreshing room data:', error);
+        removeNotification(loadingNotif);
+        showNotification('Gagal menyinkronkan data', 'error');
+      }
+    }
+
+    function refreshRoomDataSilently(roomId) {
+      try {
+        const latestRoomData = getRoom(roomId);
+        
+        if (latestRoomData && window.app.currentRoom) {
+          // Compare data to see if there are changes
+          const currentTodoCount = window.app.currentRoom.todos.length;
+          const newTodoCount = latestRoomData.todos.length;
+          const currentMemberCount = window.app.currentRoom.members.length;
+          const newMemberCount = latestRoomData.members.length;
+          
+          let hasChanges = false;
+          let changeMessage = '';
+          
+          if (newTodoCount > currentTodoCount) {
+            hasChanges = true;
+            changeMessage = `${newTodoCount - currentTodoCount} tugas baru ditambahkan`;
+          } else if (newTodoCount < currentTodoCount) {
+            hasChanges = true;
+            changeMessage = `${currentTodoCount - newTodoCount} tugas dihapus`;
+          }
+          
+          if (newMemberCount > currentMemberCount) {
+            hasChanges = true;
+            changeMessage = changeMessage ? 
+              changeMessage + ` • ${newMemberCount - currentMemberCount} anggota baru` :
+              `${newMemberCount - currentMemberCount} anggota baru bergabung`;
+          }
+          
+          if (hasChanges) {
+            // Update current room
+            window.app.currentRoom = latestRoomData;
+            
+            // Update interface
+            updateRoomInterface(latestRoomData);
+            
+            // Show notification about changes
+            showNotification(`Room diperbarui: ${changeMessage}`, 'info');
+            
+            // Update last sync time
+            updateLastSyncTime();
+          }
+        }
+        
+      } catch (error) {
+        console.error('Silent refresh error:', error);
+      }
+    }
+
+    function updateRoomInterface(roomData) {
+      // Update todo list
+      const todoListContainer = document.getElementById('todoList');
+      if (todoListContainer) {
+        todoListContainer.innerHTML = renderTodoList(roomData.todos);
+      }
+      
+      // Update member cards
+      const membersGrid = document.getElementById('currentMembersGrid');
+      if (membersGrid) {
+        membersGrid.innerHTML = renderMemberCards(roomData.members);
+      }
+      
+      // Update room title with todo count
+      const roomTitle = document.querySelector('.room-content h3');
+      if (roomTitle) {
+        roomTitle.textContent = `📋 Manajemen Tugas (${roomData.todos.length})`;
+      }
+      
+      // Update members count
+      const membersTitle = document.querySelector('.room-members h3');
+      if (membersTitle) {
+        membersTitle.textContent = `👥 Anggota Room (${roomData.members.length}/${roomData.maxMembers})`;
+      }
+    }
+
+    function updateLastSyncTime() {
+      const lastUpdatedElement = document.getElementById('lastUpdated');
+      if (lastUpdatedElement) {
+        const now = new Date();
+        lastUpdatedElement.textContent = `• Terakhir sync: ${now.toLocaleTimeString('id-ID')}`;
+      }
+    }
+
     function hideActiveRoom() {
       const mentorContainer = document.getElementById('activeRoom');
       const memberContainer = document.getElementById('memberActiveRoom');
       
       if (mentorContainer) mentorContainer.classList.add('hidden');
       if (memberContainer) memberContainer.classList.add('hidden');
+      
+      // Stop auto-refresh
+      stopRoomAutoRefresh();
       
       // Update member status to offline
       if (window.app.currentRoom) {
@@ -2612,78 +2779,84 @@
       try {
         const hash = window.location.hash;
         if (hash.startsWith('#room=')) {
+          console.log('Processing room from URL...');
           const encodedData = hash.substring(6); // Remove '#room='
-          const roomData = JSON.parse(atob(encodedData));
           
+          // Validate and decode
+          if (!encodedData) {
+            throw new Error('Empty room data');
+          }
+          
+          const roomData = JSON.parse(atob(encodedData));
           console.log('Room data from URL:', roomData);
           
+          if (!roomData.roomId || !roomData.roomName) {
+            throw new Error('Invalid room data structure');
+          }
+          
+          // Check if user is logged in
           if (!window.app.user) {
+            console.log('User not logged in, storing room for later...');
             // Store room data for after login
             sessionStorage.setItem('pendingRoom', JSON.stringify(roomData));
             showNotification('Silakan login terlebih dahulu untuk bergabung ke room', 'info');
+            
+            // Clear hash and show login
+            window.location.hash = '';
+            showPage('loginPage');
             return;
           }
           
-          // Save room to local storage
-          saveRoom(roomData);
-          
-          // Auto-join user to room
-          const isAlreadyMember = roomData.members.some(m => m.username === window.app.user.username);
-          
-          if (!isAlreadyMember) {
-            // Add user as member
-            const newMember = {
-              username: window.app.user.username,
-              fullName: window.app.user.fullName,
-              role: 'member',
-              avatar: window.app.user.avatar,
-              joinedAt: new Date().toISOString(),
-              joinMessage: 'Bergabung melalui link',
-              isOnline: true
-            };
+          // Check if user has role
+          if (!window.app.user.role) {
+            console.log('User has no role, storing room for later...');
+            sessionStorage.setItem('pendingRoom', JSON.stringify(roomData));
+            showNotification(`Pilih peran Anda untuk bergabung ke room "${roomData.roomName}"`, 'info');
             
-            roomData.members.push(newMember);
-            saveRoom(roomData);
+            // Clear hash and show role selection
+            window.location.hash = '';
+            showPage('roleSelectionPage');
+            updateUserProfile();
+            return;
           }
           
-          // Set as current room and display
-          window.app.currentRoom = roomData;
-          
-          // Navigate to appropriate dashboard
-          if (window.app.user.role === 'mentor') {
-            showPage('mentorDashboardPage');
-            updateUserProfile('mentorProfile');
-          } else {
-            showPage('memberDashboardPage');  
-            updateUserProfile('memberProfile');
-          }
-          
-          // Display room
-          displayActiveRoom(roomData);
-          
-          showNotification(`Berhasil bergabung ke room "${roomData.roomName}" melalui link!`, 'success');
-          
-          // Clear hash
-          window.location.hash = '';
+          console.log('Processing auto-join...');
+          processAutoJoin(roomData);
         }
       } catch (error) {
         console.error('Error handling room from URL:', error);
-        showNotification('Link room tidak valid atau rusak', 'error');
+        showNotification('Link room tidak valid atau rusak. Silakan minta link baru dari host.', 'error');
         window.location.hash = '';
+        
+        // Navigate to appropriate page
+        if (!window.app.user) {
+          showPage('loginPage');
+        } else if (!window.app.user.role) {
+          showPage('roleSelectionPage');
+          updateUserProfile();
+        } else {
+          const dashboardPage = window.app.user.role === 'mentor' ? 'mentorDashboardPage' : 'memberDashboardPage';
+          const profileId = window.app.user.role === 'mentor' ? 'mentorProfile' : 'memberProfile';
+          showPage(dashboardPage);
+          updateUserProfile(profileId);
+        }
       }
     }
 
-    // Function to check for pending room after login
-    function checkPendingRoom() {
+    function processAutoJoin(roomData) {
       try {
-        const pendingRoomData = sessionStorage.getItem('pendingRoom');
-        if (pendingRoomData) {
-          const roomData = JSON.parse(pendingRoomData);
-          sessionStorage.removeItem('pendingRoom');
-          
-          // Save room and auto-join
-          saveRoom(roomData);
-          
+        console.log('Auto-joining room:', roomData.roomName);
+        
+        // Save room to local storage first
+        saveRoom(roomData);
+        console.log('Room saved to localStorage');
+        
+        // Check if user is already a member
+        const isAlreadyMember = roomData.members.some(m => m.username === window.app.user.username);
+        console.log('Already member?', isAlreadyMember);
+        
+        if (!isAlreadyMember) {
+          // Add user as member
           const newMember = {
             username: window.app.user.username,
             fullName: window.app.user.fullName,
@@ -2696,14 +2869,48 @@
           
           roomData.members.push(newMember);
           saveRoom(roomData);
+          console.log('User added as new member');
+        }
+        
+        // Set as current room
+        window.app.currentRoom = roomData;
+        
+        // Navigate to appropriate dashboard
+        const dashboardPage = window.app.user.role === 'mentor' ? 'mentorDashboardPage' : 'memberDashboardPage';
+        const profileId = window.app.user.role === 'mentor' ? 'mentorProfile' : 'memberProfile';
+        
+        console.log('Navigating to:', dashboardPage);
+        showPage(dashboardPage);
+        updateUserProfile(profileId);
+        
+        // Wait a bit for page to load, then display room
+        setTimeout(() => {
+          console.log('Displaying active room...');
+          displayActiveRoom(roomData);
+          showNotification(`Berhasil bergabung ke room "${roomData.roomName}"!`, 'success');
+        }, 500);
+        
+        // Clear hash
+        window.location.hash = '';
+        
+      } catch (error) {
+        console.error('Error in auto-join process:', error);
+        showNotification('Gagal bergabung ke room secara otomatis', 'error');
+        window.location.hash = '';
+      }
+    }
+
+    // Function to check for pending room after login/role selection
+    function checkPendingRoom() {
+      try {
+        const pendingRoomData = sessionStorage.getItem('pendingRoom');
+        if (pendingRoomData && window.app.user && window.app.user.role) {
+          console.log('Processing pending room...');
+          const roomData = JSON.parse(pendingRoomData);
+          sessionStorage.removeItem('pendingRoom');
           
-          showNotification(`Auto-join ke room "${roomData.roomName}"!`, 'success');
-          
-          // Show room after role selection
-          setTimeout(() => {
-            window.app.currentRoom = roomData;
-            displayActiveRoom(roomData);
-          }, 1000);
+          // Process the pending room
+          processAutoJoin(roomData);
         }
       } catch (error) {
         console.error('Error checking pending room:', error);
@@ -2760,8 +2967,21 @@
       const form = document.getElementById('createRoomForm');
       const formData = new FormData(form);
       
+      const roomName = formData.get('roomName').trim();
+      
+      if (!roomName) {
+        showNotification('Nama room harus diisi!', 'error');
+        return;
+      }
+
+      if (!window.app.user || !window.app.user.username) {
+        showNotification('Error: Data user tidak valid. Silakan login ulang.', 'error');
+        showPage('loginPage');
+        return;
+      }
+
       const roomData = {
-        roomName: formData.get('roomName').trim(),
+        roomName: roomName,
         roomDescription: formData.get('roomDescription').trim(),
         roomType: formData.get('roomType'),
         maxMembers: parseInt(formData.get('maxMembers')) || 10,
@@ -2783,35 +3003,45 @@
         }
       };
 
-      if (!roomData.roomName) {
-        showNotification('Nama room harus diisi!', 'error');
-        return;
-      }
-
       try {
         console.log('Creating room:', roomData);
+        
+        // Save to localStorage
         saveRoom(roomData);
         
         // Verify save immediately
         const savedRoom = getRoom(roomData.roomId);
-        console.log('Verified saved room:', savedRoom);
+        if (!savedRoom) {
+          throw new Error('Failed to save room to storage');
+        }
         
+        console.log('Room successfully saved:', savedRoom);
+        
+        // Set as current room
         window.app.currentRoom = roomData;
         
+        // Close modal
         closeModal('createRoomModal');
         
-        // Show room ID prominently in notification
-        showNotification(`Room "${roomData.roomName}" berhasil dibuat!\n\nRoom ID: ${roomData.roomId}\n\nSilakan bagikan Room ID ini untuk mengundang anggota!`, 'success');
+        // Show success notification with actions
+        showNotification(`Room "${roomData.roomName}" berhasil dibuat!`, 'success');
         
-        // Also log to console for easy copy
-        console.log('🏠 ROOM CREATED SUCCESSFULLY!');
-        console.log('📋 Room ID:', roomData.roomId);
-        console.log('👑 Owner:', roomData.createdBy);
-        console.log('📊 All rooms in storage:', getAllRooms());
+        // Auto-display the created room
+        setTimeout(() => {
+          displayActiveRoom(roomData);
+        }, 500);
+        
+        // Log for debugging
+        console.log('Room created successfully!');
+        console.log('Room ID:', roomData.roomId);
+        console.log('Owner:', roomData.createdBy);
         
       } catch (error) {
         console.error('Error creating room:', error);
         showNotification('Gagal membuat room. Silakan coba lagi.', 'error');
+        
+        // Reset form on error
+        form.reset();
       }
     }
 

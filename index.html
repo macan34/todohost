@@ -3150,7 +3150,15 @@
       }
     }
 
-    // Enhanced debugging for storage functions
+    // Storage Functions
+    function generateRoomId() {
+      return 'room-' + Math.random().toString(36).substring(2, 8) + '-' + Date.now().toString(36);
+    }
+
+    function generateTodoId() {
+      return 'todo-' + Math.random().toString(36).substring(2, 9) + '-' + Date.now().toString(36);
+    }
+
     function saveRoom(roomData) {
       try {
         console.log('💾 SAVING ROOM:', roomData.roomId);
@@ -3204,6 +3212,16 @@
       } catch (error) {
         console.error('💥 Error loading rooms:', error);
         return [];
+      }
+    }
+
+    function deleteRoomFromStorage(roomId) {
+      try {
+        const rooms = getAllRooms().filter(r => r.roomId !== roomId);
+        localStorage.setItem('todopro_rooms', JSON.stringify(rooms));
+      } catch (error) {
+        console.error('Error deleting room:', error);
+        throw error;
       }
     }
 

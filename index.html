@@ -2482,6 +2482,7 @@
       `;
     }
 
+    // Add notification to encourage re-sharing after updates
     function createTodo() {
       const form = document.getElementById('addTodoForm');
       const formData = new FormData(form);
@@ -2520,6 +2521,11 @@
           
           showNotification(`Tugas "${title}" berhasil diupdate!`, 'success');
           
+          // Show sharing reminder
+          setTimeout(() => {
+            showNotification('💡 Tip: Klik "🔗 Share Room ID" untuk berbagi update terbaru dengan tim!', 'info');
+          }, 2000);
+          
         } else {
           // Create new todo
           const newTodo = {
@@ -2547,6 +2553,11 @@
           window.app.currentRoom.todos.push(newTodo);
           
           showNotification(`Tugas "${title}" berhasil dibuat!`, 'success');
+          
+          // Show sharing reminder for new todos
+          setTimeout(() => {
+            showNotification('📢 Share link baru ke anggota agar mereka dapat melihat tugas ini!', 'info');
+          }, 2000);
           
           // Notify assignment if assigned
           if (newTodo.assignedTo && newTodo.assignedTo !== window.app.user.username) {
@@ -2684,51 +2695,59 @@
 
         console.log('Sharing Room ID:', roomId);
         
-        // Create shareable room data
+        // Get the latest room data
+        const currentRoom = window.app.currentRoom || room;
+        
+        // Create shareable room data with current state
         const shareableData = {
-          roomId: room.roomId,
-          roomName: room.roomName,
-          roomDescription: room.roomDescription,
-          roomType: room.roomType,
-          maxMembers: room.maxMembers,
-          createdBy: room.createdBy,
-          createdAt: room.createdAt,
-          settings: room.settings,
-          members: room.members,
-          todos: room.todos
+          roomId: currentRoom.roomId,
+          roomName: currentRoom.roomName,
+          roomDescription: currentRoom.roomDescription,
+          roomType: currentRoom.roomType,
+          maxMembers: currentRoom.maxMembers,
+          createdBy: currentRoom.createdBy,
+          createdAt: currentRoom.createdAt,
+          settings: currentRoom.settings,
+          members: currentRoom.members,
+          todos: currentRoom.todos,
+          lastUpdated: new Date().toISOString()
         };
         
         // Encode room data to URL-safe string
         const encodedData = btoa(JSON.stringify(shareableData));
         const shareUrl = window.location.origin + window.location.pathname + '#room=' + encodedData;
         
-        // Create sharing text
-        const shareText = `🏠 Bergabung ke Room: ${room.roomName}
+        // Create comprehensive sharing text
+        const shareText = `🏠 Bergabung ke Room: ${currentRoom.roomName}
 
-📋 Room ID: ${room.roomId}
+📋 Room ID: ${currentRoom.roomId}
 
-🔗 Link Langsung: ${shareUrl}
+🔗 Link Langsung (Recommended): 
+${shareUrl}
 
 📱 Cara bergabung:
-1. Buka link di atas, ATAU
-2. Copy Room ID dan paste di "Gabung ke Room"
+1. Klik link langsung di atas (otomatis join), ATAU
+2. Copy Room ID "${currentRoom.roomId}" dan paste di "Gabung ke Room"
 
-👑 Host: ${room.createdBy}
-📊 Anggota: ${room.members.length}/${room.maxMembers}`;
+👑 Host: ${currentRoom.createdBy}
+👥 Anggota: ${currentRoom.members.length}/${currentRoom.maxMembers}  
+📋 Tugas: ${currentRoom.todos.length}
+📅 Dibuat: ${formatDate(currentRoom.createdAt)}
+
+💡 Link berisi data terbaru termasuk semua tugas dan anggota!`;
         
         // Try to copy to clipboard
         if (navigator.clipboard && window.isSecureContext) {
           navigator.clipboard.writeText(shareText).then(() => {
-            showNotification('Link room berhasil disalin! Bagikan ke anggota tim Anda.', 'success');
+            showNotification('Link room lengkap berhasil disalin!\nBagikan ke anggota untuk mendapat update terbaru.', 'success');
           }).catch(() => {
-            fallbackShareRoom(shareText, shareUrl);
+            fallbackShareRoom(shareText, shareUrl, currentRoom);
           });
         } else {
-          fallbackShareRoom(shareText, shareUrl);
+          fallbackShareRoom(shareText, shareUrl, currentRoom);
         }
         
-        console.log('Share URL created:', shareUrl);
-        console.log('Room data encoded successfully');
+        console.log('Share URL with latest data created:', shareUrl);
         
       } catch (error) {
         console.error('Error sharing room:', error);
@@ -2736,32 +2755,49 @@
       }
     }
 
-    function fallbackShareRoom(shareText, shareUrl) {
+    function fallbackShareRoom(shareText, shareUrl, roomData) {
       // Create modal for sharing options
       const modal = document.createElement('div');
       modal.className = 'modal active';
       modal.innerHTML = `
         <div class="modal-content">
           <div class="modal-header">
-            <h3>🔗 Bagikan Room</h3>
+            <h3>🔗 Bagikan Room - Data Terbaru</h3>
             <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
           </div>
           <div style="padding: 2rem;">
-            <div style="margin-bottom: 1.5rem;">
-              <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Link Langsung (Recommended):</label>
-              <textarea readonly class="form-control" style="height: 60px; font-size: 0.9rem;" onclick="this.select()">${shareUrl}</textarea>
-              <small class="form-help">Anggota dapat klik link ini untuk langsung bergabung</small>
+            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+              <h4 style="margin: 0 0 0.5rem 0; color: var(--success-color);">📊 Data Room Saat Ini:</h4>
+              <p style="margin: 0; font-size: 0.9rem;">
+                👥 ${roomData.members.length} anggota • 📋 ${roomData.todos.length} tugas<br>
+                ⏰ Terakhir update: ${new Date().toLocaleString('id-ID')}
+              </p>
             </div>
             
             <div style="margin-bottom: 1.5rem;">
-              <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Room ID Only:</label>
-              <input readonly class="form-control" value="${shareText.match(/Room ID: (.+)/)[1]}" onclick="this.select()" style="font-family: monospace;">
-              <small class="form-help">Jika link tidak bekerja, gunakan Room ID ini</small>
+              <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">🎯 Link Terbaru (Recommended):</label>
+              <textarea readonly class="form-control" style="height: 80px; font-size: 0.85rem;" onclick="this.select()">${shareUrl}</textarea>
+              <small class="form-help">⭐ Link ini berisi semua data terbaru (anggota + tugas)</small>
             </div>
             
             <div style="margin-bottom: 1.5rem;">
-              <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Pesan Lengkap:</label>
-              <textarea readonly class="form-control" style="height: 120px; font-size: 0.85rem;" onclick="this.select()">${shareText}</textarea>
+              <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">📋 Room ID Saja:</label>
+              <input readonly class="form-control" value="${roomData.roomId}" onclick="this.select()" style="font-family: monospace; font-size: 1.2rem; text-align: center;">
+              <small class="form-help">⚠️ Hanya Room ID - data mungkin tidak sync</small>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+              <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">📱 Pesan Lengkap untuk Chat:</label>
+              <textarea readonly class="form-control" style="height: 150px; font-size: 0.8rem;" onclick="this.select()">${shareText}</textarea>
+            </div>
+            
+            <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 1rem;">
+              <h4 style="margin: 0 0 0.5rem 0; color: var(--info-color);">💡 Tips Sharing:</h4>
+              <ul style="margin: 0; padding-left: 1rem; font-size: 0.9rem;">
+                <li><strong>Link Terbaru</strong> = Data langsung sync (recommended)</li>
+                <li><strong>Room ID</strong> = Manual join, mungkin perlu refresh</li>
+                <li>Setelah update tugas/anggota, share link baru lagi</li>
+              </ul>
             </div>
           </div>
           <div class="modal-actions">

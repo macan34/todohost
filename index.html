@@ -928,6 +928,360 @@
       .form-row {
         grid-template-columns: 1fr;
       }
+
+      /* Mobile optimizations for modals */
+      .modal-content {
+        width: 95%;
+        max-height: 95vh;
+        margin: 1rem;
+      }
+
+      .modal-header {
+        padding: 1rem 1.5rem;
+      }
+
+      .modal form {
+        padding: 1.5rem;
+      }
+
+      .modal-actions {
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .modal-actions .btn {
+        width: 100%;
+      }
+
+      /* Room cards mobile */
+      .members-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+      }
+
+      .member-card {
+        padding: 1rem;
+      }
+
+      /* Todo cards mobile */
+      .todo-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+      }
+
+      .todo-priority {
+        align-self: flex-start;
+      }
+
+      .todo-details {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .todo-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .todo-actions .btn {
+        width: 100%;
+      }
+
+      /* Room management mobile */
+      .active-room-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+      }
+
+      .room-card-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .room-card-actions .btn {
+        width: 100%;
+        min-width: auto;
+      }
+
+      /* Navigation mobile */
+      .navigation {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .nav-btn {
+        width: 45px;
+        height: 45px;
+        font-size: 1.2rem;
+      }
+
+      /* Notification mobile */
+      .notification-container {
+        width: 95%;
+        top: 1rem;
+      }
+
+      .notification-toast {
+        padding: 1rem;
+        font-size: 0.9rem;
+      }
+
+      /* Dashboard mobile */
+      .card-full {
+        max-width: 100%;
+        margin: 0;
+      }
+
+      /* Form improvements mobile */
+      .form-control {
+        font-size: 16px; /* Prevent zoom on iOS */
+        padding: 0.875rem;
+      }
+
+      .btn {
+        padding: 0.875rem 1.5rem;
+        font-size: 0.95rem;
+        min-height: 48px; /* Touch friendly */
+      }
+
+      .btn-sm {
+        padding: 0.625rem 1rem;
+        font-size: 0.85rem;
+        min-height: 40px;
+      }
+
+      /* Room stats mobile */
+      .room-stats {
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .stat-item {
+        justify-content: flex-start;
+      }
+
+      /* Badge adjustments */
+      .room-badges {
+        gap: 0.25rem;
+        margin-top: 0.5rem;
+      }
+
+      /* Better text wrapping */
+      .room-description,
+      .todo-info p {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
+
+      /* Improved scrolling */
+      .rooms-list,
+      .modal-content {
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Touch improvements */
+      .room-card:hover,
+      .todo-card:hover,
+      .member-card:hover {
+        transform: none; /* Disable hover effects on touch */
+      }
+
+      /* Better spacing for mobile */
+      .room-content {
+        padding: 1rem;
+      }
+
+      .empty-state {
+        padding: 2rem 1rem;
+      }
+
+      .empty-state h3,
+      .empty-state h4 {
+        font-size: 1.1rem;
+      }
+
+      .empty-state p {
+        font-size: 0.9rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      /* Extra small screens */
+      .container {
+        padding: 0.75rem;
+      }
+
+      .card {
+        padding: 1rem;
+        border-radius: 16px;
+      }
+
+      .logo h1 {
+        font-size: 1.75rem;
+      }
+
+      .logo p {
+        font-size: 1rem;
+      }
+
+      .modal-content {
+        width: 98%;
+        margin: 0.5rem;
+      }
+
+      .modal-header h3 {
+        font-size: 1.1rem;
+      }
+
+      .btn {
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+      }
+
+      .feature-card {
+        padding: 1rem;
+      }
+
+      .feature-icon {
+        font-size: 2rem;
+      }
+
+      /* Compact todo cards */
+      .todo-card {
+        padding: 1rem;
+      }
+
+      .todo-info h4 {
+        font-size: 1rem;
+      }
+
+      /* Smaller member cards */
+      .member-card {
+        padding: 0.75rem;
+      }
+
+      .member-avatar {
+        width: 36px;
+        height: 36px;
+        font-size: 1.1rem;
+      }
+
+      /* Navigation adjustments */
+      .navigation {
+        top: 0.75rem;
+        right: 0.75rem;
+      }
+
+      .nav-btn {
+        width: 42px;
+        height: 42px;
+        font-size: 1.1rem;
+      }
+    }
+
+    /* Landscape orientation improvements */
+    @media (max-height: 600px) and (orientation: landscape) {
+      .modal-content {
+        max-height: 90vh;
+      }
+
+      .rooms-list {
+        max-height: 50vh;
+      }
+
+      .container {
+        justify-content: flex-start;
+        padding-top: 1rem;
+      }
+
+      .logo h1 {
+        font-size: 2rem;
+      }
+
+      .feature-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+      }
+
+      .feature-card {
+        padding: 1rem;
+      }
+    }
+
+    /* Dark mode mobile improvements */
+    @media (max-width: 768px) {
+      [data-theme="dark"] .modal-content {
+        border: 1px solid var(--border-color);
+      }
+
+      [data-theme="dark"] .form-control {
+        border: 2px solid var(--border-color);
+        background: var(--bg-secondary);
+      }
+    }
+
+    /* Touch-friendly improvements */
+    @media (pointer: coarse) {
+      .btn,
+      .nav-btn,
+      .modal-close {
+        min-height: 44px;
+        min-width: 44px;
+      }
+
+      .checkbox-label {
+        padding: 0.5rem 0;
+      }
+
+      .member-card,
+      .room-card,
+      .todo-card {
+        margin-bottom: 1rem;
+      }
+    }
+
+    /* Improve text readability on small screens */
+    @media (max-width: 768px) {
+      body {
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .form-help {
+        font-size: 0.8rem;
+      }
+
+      .stat-item {
+        font-size: 0.8rem;
+      }
+
+      .badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
+      }
+    }
+
+    /* Fix viewport issues */
+    @media (max-width: 768px) {
+      html {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+      }
+
+      body {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* Prevent horizontal scroll */
+      .container,
+      .modal-content,
+      .card {
+        max-width: 100%;
+        overflow-x: hidden;
+      }
     }
   </style>
 </head>

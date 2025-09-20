@@ -2139,10 +2139,16 @@
 
     function shareRoom(roomId) {
       try {
+        console.log('Sharing Room ID:', roomId);
+        
+        // Create a more user-friendly sharing message
+        const room = getRoom(roomId);
+        const shareText = `Room ID: ${roomId}${room ? `\nRoom: ${room.roomName}` : ''}`;
+        
         // Copy room ID to clipboard
         if (navigator.clipboard && window.isSecureContext) {
           navigator.clipboard.writeText(roomId).then(() => {
-            showNotification('Room ID berhasil disalin!', 'success');
+            showNotification(`Room ID berhasil disalin!\n${shareText}`, 'success');
           }).catch(() => {
             fallbackCopyTextToClipboard(roomId);
           });
@@ -2156,6 +2162,7 @@
     }
 
     function fallbackCopyTextToClipboard(text) {
+      // Create temporary textarea
       const textArea = document.createElement('textarea');
       textArea.value = text;
       textArea.style.position = 'fixed';
@@ -2167,10 +2174,11 @@
       
       try {
         document.execCommand('copy');
-        showNotification('Room ID berhasil disalin!', 'success');
+        showNotification(`Room ID berhasil disalin!\nRoom ID: ${text}`, 'success');
       } catch (err) {
         console.error('Fallback copy failed:', err);
-        showNotification('Tidak dapat menyalin Room ID. Copy manual: ' + text, 'warning');
+        // Show the room ID in notification for manual copy
+        showNotification(`Room ID: ${text}\n\nSalin manual Room ID di atas untuk dibagikan!`, 'warning');
       }
       
       document.body.removeChild(textArea);
@@ -2278,24 +2286,36 @@
         return;
       }
 
+      console.log('Attempting to join room:', roomId);
+      console.log('Current user:', window.app.user);
+
       try {
         const existingRoom = getRoom(roomId);
+        console.log('Found room:', existingRoom);
         
         if (existingRoom) {
+          // Check if room is full
           if (existingRoom.members.length >= existingRoom.maxMembers) {
             showNotification('Room sudah penuh!', 'error');
             return;
           }
           
+          // Check if user already in room
           const isAlreadyMember = existingRoom.members.some(member => 
             member.username === window.app.user.username
           );
           
           if (isAlreadyMember) {
             showNotification('Anda sudah bergabung di room ini!', 'warning');
+            
+            // Load existing room anyway
+            window.app.currentRoom = existingRoom;
+            displayActiveRoom(existingRoom);
+            closeModal('joinRoomModal');
             return;
           }
           
+          // Add user to room
           const newMember = {
             username: window.app.user.username,
             fullName: window.app.user.fullName,
@@ -2306,16 +2326,29 @@
             isOnline: true
           };
           
+          console.log('Adding new member:', newMember);
+          
           existingRoom.members.push(newMember);
+          
+          // Save room
+          console.log('Saving room with new member...');
           saveRoom(existingRoom);
+          
+          // Verify save
+          const savedRoom = getRoom(roomId);
+          console.log('Verified saved room:', savedRoom);
           
           window.app.currentRoom = existingRoom;
           
           closeModal('joinRoomModal');
           showNotification(`Berhasil bergabung ke room "${existingRoom.roomName}"!`, 'success');
           
+          // Auto-enter room after joining
+          displayActiveRoom(existingRoom);
+          
         } else {
           showNotification('Room tidak ditemukan! Pastikan Room ID benar.', 'error');
+          console.log('Room not found. Available rooms:', getAllRooms());
         }
         
       } catch (error) {

@@ -3058,24 +3058,50 @@
       }
 
       console.log('🔍 ATTEMPTING TO JOIN ROOM');
-      console.log('📋 Input Room ID:', roomId);
+      console.log('📋 Input Room ID:', `"${roomId}"`);
       console.log('👤 Current user:', window.app.user);
       
-      // Debug: Show all available rooms
+      // Debug: Show all available rooms with more detail
       const allRooms = getAllRooms();
-      console.log('📊 All available rooms:', allRooms);
+      console.log('📊 DETAILED ROOM ANALYSIS:');
       console.log('🔢 Total rooms in storage:', allRooms.length);
       
       if (allRooms.length > 0) {
-        console.log('📝 Available Room IDs:');
-        allRooms.forEach(room => {
-          console.log(`  - ${room.roomId} (${room.roomName})`);
+        console.log('📝 All Room Details:');
+        allRooms.forEach((room, index) => {
+          console.log(`${index + 1}. Room ID: "${room.roomId}"`);
+          console.log(`   Name: "${room.roomName}"`);
+          console.log(`   Created by: "${room.createdBy}"`);
+          console.log(`   Members: ${room.members.length}`);
+          console.log(`   Created: ${room.createdAt}`);
+          console.log('   ---');
         });
+        
+        // Check for exact match
+        const exactMatch = allRooms.find(r => r.roomId === roomId);
+        console.log('🎯 Exact match found:', exactMatch ? 'YES' : 'NO');
+        
+        // Check for partial matches (case sensitive)
+        const partialMatches = allRooms.filter(r => r.roomId.includes(roomId) || roomId.includes(r.roomId));
+        console.log('🔍 Partial matches:', partialMatches.length);
+        
+        if (partialMatches.length > 0) {
+          console.log('🔍 Partial match details:');
+          partialMatches.forEach(room => {
+            console.log(`   - "${room.roomId}" vs "${roomId}"`);
+          });
+        }
+      } else {
+        console.log('❌ NO ROOMS FOUND in localStorage');
+        console.log('💡 Possible causes:');
+        console.log('   1. No rooms have been created yet');
+        console.log('   2. localStorage was cleared');
+        console.log('   3. Different browser/incognito mode');
       }
 
       try {
         const existingRoom = getRoom(roomId);
-        console.log('🔍 Found room:', existingRoom);
+        console.log('🔍 getRoom() result:', existingRoom);
         
         if (existingRoom) {
           console.log('✅ Room found! Processing join...');
@@ -3138,10 +3164,24 @@
           
         } else {
           console.log('❌ Room NOT found!');
-          console.log('🔍 Searching for Room ID:', roomId);
-          console.log('📊 Available Room IDs:', allRooms.map(r => r.roomId));
+          console.log('🔍 Searching for Room ID:', `"${roomId}"`);
           
-          showNotification(`Room tidak ditemukan!\n\nRoom ID yang dicari: ${roomId}\n\nPastikan Room ID benar dan room masih aktif.`, 'error');
+          // More detailed error message
+          let errorMessage = `Room tidak ditemukan!\n\nRoom ID yang dicari: "${roomId}"`;
+          
+          if (allRooms.length === 0) {
+            errorMessage += '\n\n🔍 Tidak ada room di storage lokal.\nPastikan room sudah dibuat dan Anda menggunakan browser yang sama.';
+          } else {
+            errorMessage += '\n\n🔍 Room yang tersedia:';
+            allRooms.slice(0, 3).forEach(room => {
+              errorMessage += `\n- ${room.roomId}`;
+            });
+            if (allRooms.length > 3) {
+              errorMessage += `\n... dan ${allRooms.length - 3} room lainnya`;
+            }
+          }
+          
+          showNotification(errorMessage, 'error');
         }
         
       } catch (error) {
@@ -3150,9 +3190,41 @@
       }
     }
 
+    // Add a debugging helper function
+    function debugRoomStorage() {
+      console.log('🔧 DEBUGGING ROOM STORAGE');
+      const allRooms = getAllRooms();
+      
+      console.log('📊 Storage Analysis:');
+      console.log('- Total rooms:', allRooms.length);
+      console.log('- localStorage key exists:', localStorage.getItem('todopro_rooms') !== null);
+      console.log('- Raw storage data:', localStorage.getItem('todopro_rooms'));
+      
+      if (allRooms.length > 0) {
+        console.log('📋 Room Index:');
+        allRooms.forEach((room, i) => {
+          console.log(`${i}: "${room.roomId}" | "${room.roomName}" | by: ${room.createdBy}`);
+        });
+      }
+      
+      return allRooms;
+    }
+
+    // Add this to global scope for debugging
+    window.debugRoomStorage = debugRoomStorage;
+
     // Storage Functions
     function generateRoomId() {
-      return 'room-' + Math.random().toString(36).substring(2, 8) + '-' + Date.now().toString(36);
+      // Option 1: 6 digit numbers (000001 - 999999)
+      // return Math.floor(Math.random() * 999999).toString().padStart(6, '0');
+      
+      // Option 2: 5 random letters (ABCDE format)
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      let result = '';
+      for (let i = 0; i < 5; i++) {
+        result += letters.charAt(Math.floor(Math.random() * letters.length));
+      }
+      return result;
     }
 
     function generateTodoId() {

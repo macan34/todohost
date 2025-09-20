@@ -1717,15 +1717,26 @@
       
       loadSettings();
       
+      // Check for room URL first
+      handleRoomFromUrl();
+      
       const savedUser = getSavedUser();
       if (savedUser) {
         window.app.user = savedUser;
         showPage('roleSelectionPage');
         updateUserProfile();
         showNotification(`Selamat datang kembali, ${savedUser.fullName}!`, 'success');
+        
+        // Check for pending room after user is loaded
+        checkPendingRoom();
       }
       
       console.log('TodoPro Enhanced - Ready!');
+    });
+
+    // Listen for hash changes (back/forward navigation)
+    window.addEventListener('hashchange', function() {
+      handleRoomFromUrl();
     });
 
     // User Management
@@ -1793,6 +1804,11 @@
       }
       
       showNotification(`Anda telah bergabung sebagai ${role === 'mentor' ? 'Mentor' : 'Anggota'}!`, 'success');
+      
+      // Check for pending room after role selection
+      setTimeout(() => {
+        checkPendingRoom();
+      }, 500);
     }
 
     function updateUserProfile(containerId = 'userProfile') {
@@ -2493,49 +2509,206 @@
 
     function shareRoom(roomId) {
       try {
+        const room = getRoom(roomId);
+        if (!room) {
+          showNotification('Room tidak ditemukan!', 'error');
+          return;
+        }
+
         console.log('Sharing Room ID:', roomId);
         
-        // Create a more user-friendly sharing message
-        const room = getRoom(roomId);
-        const shareText = `Room ID: ${roomId}${room ? `\nRoom: ${room.roomName}` : ''}`;
+        // Create shareable room data
+        const shareableData = {
+          roomId: room.roomId,
+          roomName: room.roomName,
+          roomDescription: room.roomDescription,
+          roomType: room.roomType,
+          maxMembers: room.maxMembers,
+          createdBy: room.createdBy,
+          createdAt: room.createdAt,
+          settings: room.settings,
+          members: room.members,
+          todos: room.todos
+        };
         
-        // Copy room ID to clipboard
+        // Encode room data to URL-safe string
+        const encodedData = btoa(JSON.stringify(shareableData));
+        const shareUrl = window.location.origin + window.location.pathname + '#room=' + encodedData;
+        
+        // Create sharing text
+        const shareText = `🏠 Bergabung ke Room: ${room.roomName}
+
+📋 Room ID: ${room.roomId}
+
+🔗 Link Langsung: ${shareUrl}
+
+📱 Cara bergabung:
+1. Buka link di atas, ATAU
+2. Copy Room ID dan paste di "Gabung ke Room"
+
+👑 Host: ${room.createdBy}
+📊 Anggota: ${room.members.length}/${room.maxMembers}`;
+        
+        // Try to copy to clipboard
         if (navigator.clipboard && window.isSecureContext) {
-          navigator.clipboard.writeText(roomId).then(() => {
-            showNotification(`Room ID berhasil disalin!\n${shareText}`, 'success');
+          navigator.clipboard.writeText(shareText).then(() => {
+            showNotification('Link room berhasil disalin! Bagikan ke anggota tim Anda.', 'success');
           }).catch(() => {
-            fallbackCopyTextToClipboard(roomId);
+            fallbackShareRoom(shareText, shareUrl);
           });
         } else {
-          fallbackCopyTextToClipboard(roomId);
+          fallbackShareRoom(shareText, shareUrl);
         }
+        
+        console.log('Share URL created:', shareUrl);
+        console.log('Room data encoded successfully');
+        
       } catch (error) {
         console.error('Error sharing room:', error);
-        showNotification('Gagal menyalin Room ID', 'error');
+        showNotification('Gagal membuat link sharing', 'error');
       }
     }
 
-    function fallbackCopyTextToClipboard(text) {
-      // Create temporary textarea
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'fixed';
-      textArea.style.left = '-999999px';
-      textArea.style.top = '-999999px';
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
+    function fallbackShareRoom(shareText, shareUrl) {
+      // Create modal for sharing options
+      const modal = document.createElement('div');
+      modal.className = 'modal active';
+      modal.innerHTML = `
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>🔗 Bagikan Room</h3>
+            <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
+          </div>
+          <div style="padding: 2rem;">
+            <div style="margin-bottom: 1.5rem;">
+              <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Link Langsung (Recommended):</label>
+              <textarea readonly class="form-control" style="height: 60px; font-size: 0.9rem;" onclick="this.select()">${shareUrl}</textarea>
+              <small class="form-help">Anggota dapat klik link ini untuk langsung bergabung</small>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+              <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Room ID Only:</label>
+              <input readonly class="form-control" value="${shareText.match(/Room ID: (.+)/)[1]}" onclick="this.select()" style="font-family: monospace;">
+              <small class="form-help">Jika link tidak bekerja, gunakan Room ID ini</small>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+              <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Pesan Lengkap:</label>
+              <textarea readonly class="form-control" style="height: 120px; font-size: 0.85rem;" onclick="this.select()">${shareText}</textarea>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-primary" onclick="this.closest('.modal').remove()">Selesai</button>
+          </div>
+        </div>
+      `;
       
+      document.body.appendChild(modal);
+      document.body.style.overflow = 'hidden';
+    }
+
+    // Function to handle room joining from URL
+    function handleRoomFromUrl() {
       try {
-        document.execCommand('copy');
-        showNotification(`Room ID berhasil disalin!\nRoom ID: ${text}`, 'success');
-      } catch (err) {
-        console.error('Fallback copy failed:', err);
-        // Show the room ID in notification for manual copy
-        showNotification(`Room ID: ${text}\n\nSalin manual Room ID di atas untuk dibagikan!`, 'warning');
+        const hash = window.location.hash;
+        if (hash.startsWith('#room=')) {
+          const encodedData = hash.substring(6); // Remove '#room='
+          const roomData = JSON.parse(atob(encodedData));
+          
+          console.log('Room data from URL:', roomData);
+          
+          if (!window.app.user) {
+            // Store room data for after login
+            sessionStorage.setItem('pendingRoom', JSON.stringify(roomData));
+            showNotification('Silakan login terlebih dahulu untuk bergabung ke room', 'info');
+            return;
+          }
+          
+          // Save room to local storage
+          saveRoom(roomData);
+          
+          // Auto-join user to room
+          const isAlreadyMember = roomData.members.some(m => m.username === window.app.user.username);
+          
+          if (!isAlreadyMember) {
+            // Add user as member
+            const newMember = {
+              username: window.app.user.username,
+              fullName: window.app.user.fullName,
+              role: 'member',
+              avatar: window.app.user.avatar,
+              joinedAt: new Date().toISOString(),
+              joinMessage: 'Bergabung melalui link',
+              isOnline: true
+            };
+            
+            roomData.members.push(newMember);
+            saveRoom(roomData);
+          }
+          
+          // Set as current room and display
+          window.app.currentRoom = roomData;
+          
+          // Navigate to appropriate dashboard
+          if (window.app.user.role === 'mentor') {
+            showPage('mentorDashboardPage');
+            updateUserProfile('mentorProfile');
+          } else {
+            showPage('memberDashboardPage');  
+            updateUserProfile('memberProfile');
+          }
+          
+          // Display room
+          displayActiveRoom(roomData);
+          
+          showNotification(`Berhasil bergabung ke room "${roomData.roomName}" melalui link!`, 'success');
+          
+          // Clear hash
+          window.location.hash = '';
+        }
+      } catch (error) {
+        console.error('Error handling room from URL:', error);
+        showNotification('Link room tidak valid atau rusak', 'error');
+        window.location.hash = '';
       }
-      
-      document.body.removeChild(textArea);
+    }
+
+    // Function to check for pending room after login
+    function checkPendingRoom() {
+      try {
+        const pendingRoomData = sessionStorage.getItem('pendingRoom');
+        if (pendingRoomData) {
+          const roomData = JSON.parse(pendingRoomData);
+          sessionStorage.removeItem('pendingRoom');
+          
+          // Save room and auto-join
+          saveRoom(roomData);
+          
+          const newMember = {
+            username: window.app.user.username,
+            fullName: window.app.user.fullName,
+            role: 'member',
+            avatar: window.app.user.avatar,
+            joinedAt: new Date().toISOString(),
+            joinMessage: 'Bergabung melalui link',
+            isOnline: true
+          };
+          
+          roomData.members.push(newMember);
+          saveRoom(roomData);
+          
+          showNotification(`Auto-join ke room "${roomData.roomName}"!`, 'success');
+          
+          // Show room after role selection
+          setTimeout(() => {
+            window.app.currentRoom = roomData;
+            displayActiveRoom(roomData);
+          }, 1000);
+        }
+      } catch (error) {
+        console.error('Error checking pending room:', error);
+        sessionStorage.removeItem('pendingRoom');
+      }
     }
 
     function deleteRoom(roomId) {
@@ -2616,11 +2789,25 @@
       }
 
       try {
+        console.log('Creating room:', roomData);
         saveRoom(roomData);
+        
+        // Verify save immediately
+        const savedRoom = getRoom(roomData.roomId);
+        console.log('Verified saved room:', savedRoom);
+        
         window.app.currentRoom = roomData;
         
         closeModal('createRoomModal');
-        showNotification(`Room "${roomData.roomName}" berhasil dibuat!\nRoom ID: ${roomData.roomId}`, 'success');
+        
+        // Show room ID prominently in notification
+        showNotification(`Room "${roomData.roomName}" berhasil dibuat!\n\nRoom ID: ${roomData.roomId}\n\nSilakan bagikan Room ID ini untuk mengundang anggota!`, 'success');
+        
+        // Also log to console for easy copy
+        console.log('🏠 ROOM CREATED SUCCESSFULLY!');
+        console.log('📋 Room ID:', roomData.roomId);
+        console.log('👑 Owner:', roomData.createdBy);
+        console.log('📊 All rooms in storage:', getAllRooms());
         
       } catch (error) {
         console.error('Error creating room:', error);
@@ -2640,14 +2827,29 @@
         return;
       }
 
-      console.log('Attempting to join room:', roomId);
-      console.log('Current user:', window.app.user);
+      console.log('🔍 ATTEMPTING TO JOIN ROOM');
+      console.log('📋 Input Room ID:', roomId);
+      console.log('👤 Current user:', window.app.user);
+      
+      // Debug: Show all available rooms
+      const allRooms = getAllRooms();
+      console.log('📊 All available rooms:', allRooms);
+      console.log('🔢 Total rooms in storage:', allRooms.length);
+      
+      if (allRooms.length > 0) {
+        console.log('📝 Available Room IDs:');
+        allRooms.forEach(room => {
+          console.log(`  - ${room.roomId} (${room.roomName})`);
+        });
+      }
 
       try {
         const existingRoom = getRoom(roomId);
-        console.log('Found room:', existingRoom);
+        console.log('🔍 Found room:', existingRoom);
         
         if (existingRoom) {
+          console.log('✅ Room found! Processing join...');
+          
           // Check if room is full
           if (existingRoom.members.length >= existingRoom.maxMembers) {
             showNotification('Room sudah penuh!', 'error');
@@ -2658,6 +2860,9 @@
           const isAlreadyMember = existingRoom.members.some(member => 
             member.username === window.app.user.username
           );
+          
+          console.log('👥 Current members:', existingRoom.members.map(m => m.username));
+          console.log('🤔 Already member?', isAlreadyMember);
           
           if (isAlreadyMember) {
             showNotification('Anda sudah bergabung di room ini!', 'warning');
@@ -2680,17 +2885,18 @@
             isOnline: true
           };
           
-          console.log('Adding new member:', newMember);
+          console.log('➕ Adding new member:', newMember);
           
           existingRoom.members.push(newMember);
           
           // Save room
-          console.log('Saving room with new member...');
+          console.log('💾 Saving room with new member...');
           saveRoom(existingRoom);
           
           // Verify save
           const savedRoom = getRoom(roomId);
-          console.log('Verified saved room:', savedRoom);
+          console.log('✅ Verified saved room:', savedRoom);
+          console.log('👥 New member count:', savedRoom ? savedRoom.members.length : 'FAILED TO SAVE');
           
           window.app.currentRoom = existingRoom;
           
@@ -2701,45 +2907,60 @@
           displayActiveRoom(existingRoom);
           
         } else {
-          showNotification('Room tidak ditemukan! Pastikan Room ID benar.', 'error');
-          console.log('Room not found. Available rooms:', getAllRooms());
+          console.log('❌ Room NOT found!');
+          console.log('🔍 Searching for Room ID:', roomId);
+          console.log('📊 Available Room IDs:', allRooms.map(r => r.roomId));
+          
+          showNotification(`Room tidak ditemukan!\n\nRoom ID yang dicari: ${roomId}\n\nPastikan Room ID benar dan room masih aktif.`, 'error');
         }
         
       } catch (error) {
-        console.error('Error joining room:', error);
+        console.error('💥 Error joining room:', error);
         showNotification('Gagal bergabung ke room. Silakan coba lagi.', 'error');
       }
     }
 
-    // Storage Functions
-    function generateRoomId() {
-      return 'room-' + Math.random().toString(36).substring(2, 8) + '-' + Date.now().toString(36);
-    }
-
+    // Enhanced debugging for storage functions
     function saveRoom(roomData) {
       try {
+        console.log('💾 SAVING ROOM:', roomData.roomId);
         const rooms = getAllRooms();
         const existingIndex = rooms.findIndex(r => r.roomId === roomData.roomId);
         
         if (existingIndex >= 0) {
+          console.log('🔄 Updating existing room at index:', existingIndex);
           rooms[existingIndex] = roomData;
         } else {
+          console.log('➕ Adding new room to storage');
           rooms.push(roomData);
         }
         
         localStorage.setItem('todopro_rooms', JSON.stringify(rooms));
+        console.log('✅ Room saved successfully');
+        console.log('📊 Total rooms after save:', rooms.length);
+        
       } catch (error) {
-        console.error('Error saving room:', error);
+        console.error('💥 Error saving room:', error);
         throw error;
       }
     }
 
     function getRoom(roomId) {
       try {
+        console.log('🔍 GETTING ROOM:', roomId);
         const rooms = getAllRooms();
-        return rooms.find(r => r.roomId === roomId) || null;
+        console.log('📊 Searching in', rooms.length, 'rooms');
+        
+        const found = rooms.find(r => {
+          const match = r.roomId === roomId;
+          console.log(`  - Comparing "${r.roomId}" === "${roomId}":`, match);
+          return match;
+        });
+        
+        console.log('🎯 Search result:', found ? 'FOUND' : 'NOT FOUND');
+        return found || null;
       } catch (error) {
-        console.error('Error getting room:', error);
+        console.error('💥 Error getting room:', error);
         return null;
       }
     }
@@ -2747,9 +2968,11 @@
     function getAllRooms() {
       try {
         const rooms = localStorage.getItem('todopro_rooms');
-        return rooms ? JSON.parse(rooms) : [];
+        const parsed = rooms ? JSON.parse(rooms) : [];
+        console.log('📊 Retrieved', parsed.length, 'rooms from localStorage');
+        return parsed;
       } catch (error) {
-        console.error('Error loading rooms:', error);
+        console.error('💥 Error loading rooms:', error);
         return [];
       }
     }

@@ -2876,20 +2876,24 @@ ${shareUrl}
       }
     }
 
+    // Enhanced cross-browser room management system
     function processAutoJoin(roomData) {
       try {
         console.log('Auto-joining room:', roomData.roomName);
         
-        // Save room to local storage first
-        saveRoom(roomData);
-        console.log('Room saved to localStorage');
+        // CRITICAL: Always use the room data from URL as the source of truth
+        // This ensures cross-browser data consistency
         
-        // Check if user is already a member
+        // Force save the room data from URL (overwrites local storage)
+        console.log('Force saving room data from URL...');
+        forceUpdateRoom(roomData);
+        
+        // Check if user is already a member in the URL data
         const isAlreadyMember = roomData.members.some(m => m.username === window.app.user.username);
-        console.log('Already member?', isAlreadyMember);
+        console.log('Already member in URL data?', isAlreadyMember);
         
         if (!isAlreadyMember) {
-          // Add user as member
+          // Add user as member to the room data
           const newMember = {
             username: window.app.user.username,
             fullName: window.app.user.fullName,
@@ -2901,8 +2905,10 @@ ${shareUrl}
           };
           
           roomData.members.push(newMember);
-          saveRoom(roomData);
-          console.log('User added as new member');
+          console.log('Added user as new member');
+          
+          // Save the updated room data
+          forceUpdateRoom(roomData);
         }
         
         // Set as current room
@@ -2918,7 +2924,7 @@ ${shareUrl}
         
         // Wait a bit for page to load, then display room
         setTimeout(() => {
-          console.log('Displaying active room...');
+          console.log('Displaying active room with', roomData.members.length, 'members and', roomData.todos.length, 'todos');
           displayActiveRoom(roomData);
           showNotification(`Berhasil bergabung ke room "${roomData.roomName}"!`, 'success');
         }, 500);
@@ -2932,6 +2938,199 @@ ${shareUrl}
         window.location.hash = '';
       }
     }
+
+    // Force update room data (overwrites existing)
+    function forceUpdateRoom(roomData) {
+      try {
+        console.log('Force updating room:', roomData.roomId);
+        const rooms = getAllRooms();
+        
+        // Remove any existing room with same ID
+        const filteredRooms = rooms.filter(r => r.roomId !== roomData.roomId);
+        
+        // Add the new room data
+        filteredRooms.push(roomData);
+        
+        // Save to localStorage
+        localStorage.setItem('todopro_rooms', JSON.stringify(filteredRooms));
+        console.log('Room force updated with', roomData.members.length, 'members and', roomData.todos.length, 'todos');
+        
+      } catch (error) {
+        console.error('Error force updating room:', error);
+        throw error;
+      }
+    }
+
+    // Enhanced shareRoom function that includes ALL current data
+    function shareRoom(roomId) {
+      try {
+        // Always use currentRoom if available (has latest data)
+        const room = window.app.currentRoom || getRoom(roomId);
+        if (!room) {
+          showNotification('Room tidak ditemukan!', 'error');
+          return;
+        }
+
+        console.log('Sharing room with latest data:', room.roomName);
+        console.log('Members:', room.members.length, 'Todos:', room.todos.length);
+        
+        // Create comprehensive shareable data with timestamp
+        const shareableData = {
+          roomId: room.roomId,
+          roomName: room.roomName,
+          roomDescription: room.roomDescription,
+          roomType: room.roomType,
+          maxMembers: room.maxMembers,
+          createdBy: room.createdBy,
+          createdAt: room.createdAt,
+          settings: room.settings,
+          members: room.members,
+          todos: room.todos,
+          lastUpdated: new Date().toISOString(),
+          version: Date.now() // Unique version for each share
+        };
+        
+        // Encode room data to URL-safe string
+        const encodedData = btoa(JSON.stringify(shareableData));
+        const shareUrl = window.location.origin + window.location.pathname + '#room=' + encodedData;
+        
+        // Create detailed sharing text
+        const shareText = `🏠 TodoPro Room: ${room.roomName}
+
+📋 Room ID: ${room.roomId}
+
+🔗 Link Terbaru (WAJIB gunakan link ini):
+${shareUrl}
+
+📊 Data saat ini:
+👥 Anggota: ${room.members.length}/${room.maxMembers}
+📋 Tugas: ${room.todos.length}
+⏰ Update: ${new Date().toLocaleString('id-ID')}
+
+⚠️ PENTING: 
+- Gunakan link di atas untuk data terbaru
+- Jangan gunakan Room ID manual
+- Link berisi semua anggota dan tugas terkini
+
+👑 Host: ${room.createdBy}`;
+        
+        // Copy to clipboard
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(shareText).then(() => {
+            showNotification('Link room terbaru berhasil disalin!\nPastikan anggota menggunakan link ini untuk mendapat data terbaru.', 'success');
+          }).catch(() => {
+            fallbackShareRoom(shareText, shareUrl, room);
+          });
+        } else {
+          fallbackShareRoom(shareText, shareUrl, room);
+        }
+        
+        console.log('Share URL created with version:', shareableData.version);
+        
+      } catch (error) {
+        console.error('Error sharing room:', error);
+        showNotification('Gagal membuat link sharing', 'error');
+      }
+    }
+
+    // Enhanced join room that forces URL-based joining
+    function joinRoom() {
+      // Show warning about manual room ID joining
+      if (confirm('PERINGATAN: Manual join dengan Room ID mungkin tidak mendapat data terbaru.\n\nApakah Anda yakin ingin lanjut?\n\nRekomendasi: Minta link langsung dari mentor untuk data terbaru.')) {
+        joinRoomManual();
+      }
+    }
+
+    function joinRoomManual() {
+      const form = document.getElementById('joinRoomForm');
+      const formData = new FormData(form);
+      
+      const roomId = formData.get('roomId').trim();
+      const joinMessage = formData.get('joinMessage').trim();
+
+      if (!roomId) {
+        showNotification('Room ID harus diisi!', 'error');
+        return;
+      }
+
+      console.log('Manual join attempt for room:', roomId);
+      
+      try {
+        const existingRoom = getRoom(roomId);
+        
+        if (existingRoom) {
+          console.log('Room found in local storage');
+          
+          // Check if room is full
+          if (existingRoom.members.length >= existingRoom.maxMembers) {
+            showNotification('Room sudah penuh!', 'error');
+            return;
+          }
+          
+          // Check if user already in room
+          const isAlreadyMember = existingRoom.members.some(member => 
+            member.username === window.app.user.username
+          );
+          
+          if (isAlreadyMember) {
+            showNotification('Anda sudah bergabung di room ini!', 'warning');
+            window.app.currentRoom = existingRoom;
+            displayActiveRoom(existingRoom);
+            closeModal('joinRoomModal');
+            return;
+          }
+          
+          // Add user to room
+          const newMember = {
+            username: window.app.user.username,
+            fullName: window.app.user.fullName,
+            role: 'member',
+            avatar: window.app.user.avatar,
+            joinedAt: new Date().toISOString(),
+            joinMessage: joinMessage,
+            isOnline: true
+          };
+          
+          existingRoom.members.push(newMember);
+          
+          // Force update room
+          forceUpdateRoom(existingRoom);
+          window.app.currentRoom = existingRoom;
+          
+          closeModal('joinRoomModal');
+          displayActiveRoom(existingRoom);
+          
+          showNotification(`Berhasil bergabung ke room "${existingRoom.roomName}"!\n\nPeringatan: Data mungkin tidak sync dengan mentor. Minta link terbaru untuk update.`, 'warning');
+          
+        } else {
+          showNotification(`Room tidak ditemukan!\n\nRoom ID: ${roomId}\n\nSolusi:\n1. Minta link langsung dari mentor\n2. Pastikan Room ID benar\n3. Gunakan browser yang sama dengan mentor`, 'error');
+        }
+        
+      } catch (error) {
+        console.error('Error in manual join:', error);
+        showNotification('Gagal bergabung ke room', 'error');
+      }
+    }
+
+    // Add helper button to force refresh room data
+    function forceRefreshFromUrl() {
+      const urlPrompt = prompt('Paste link room terbaru dari mentor:');
+      if (urlPrompt && urlPrompt.includes('#room=')) {
+        const hash = urlPrompt.split('#room=')[1];
+        try {
+          const roomData = JSON.parse(atob(hash));
+          forceUpdateRoom(roomData);
+          window.app.currentRoom = roomData;
+          displayActiveRoom(roomData);
+          showNotification('Data room berhasil diperbarui dari link!', 'success');
+        } catch (error) {
+          showNotification('Link tidak valid!', 'error');
+        }
+      }
+    }
+
+    // Add to global for debugging
+    window.forceRefreshFromUrl = forceRefreshFromUrl;
 
     // Function to check for pending room after login/role selection
     function checkPendingRoom() {

@@ -2203,7 +2203,7 @@
         return;
       }
       
-      const loadingNotif = showNotification('Menyinkronkan data room...', 'loading');
+      showNotification('Menyinkronkan data room...', 'info');
       
       try {
         // In a real app, this would fetch from server
@@ -2220,20 +2220,17 @@
           // Update display
           updateRoomInterface(latestRoomData);
           
-          removeNotification(loadingNotif);
           showNotification('Data room berhasil disinkronkan!', 'success');
           
           // Update last sync time
           updateLastSyncTime();
           
         } else {
-          removeNotification(loadingNotif);
           showNotification('Room tidak ditemukan di storage lokal', 'warning');
         }
         
       } catch (error) {
         console.error('Error refreshing room data:', error);
-        removeNotification(loadingNotif);
         showNotification('Gagal menyinkronkan data', 'error');
       }
     }
@@ -3226,7 +3223,6 @@ ${shareUrl}
       }
     }
 
-    // Add a debugging helper function
     function debugRoomStorage() {
       console.log('🔧 DEBUGGING ROOM STORAGE');
       const allRooms = getAllRooms();
@@ -3234,20 +3230,66 @@ ${shareUrl}
       console.log('📊 Storage Analysis:');
       console.log('- Total rooms:', allRooms.length);
       console.log('- localStorage key exists:', localStorage.getItem('todopro_rooms') !== null);
-      console.log('- Raw storage data:', localStorage.getItem('todopro_rooms'));
+      
+      const rawData = localStorage.getItem('todopro_rooms');
+      console.log('- Raw storage data length:', rawData ? rawData.length : 0);
       
       if (allRooms.length > 0) {
         console.log('📋 Room Index:');
         allRooms.forEach((room, i) => {
-          console.log(`${i}: "${room.roomId}" | "${room.roomName}" | by: ${room.createdBy}`);
+          console.log(`${i + 1}. Room ID: "${room.roomId}" (${room.roomId.length} chars)`);
+          console.log(`   Name: "${room.roomName}"`);
+          console.log(`   Created by: "${room.createdBy}"`);
+          console.log(`   Members: ${room.members ? room.members.length : 'undefined'}`);
+          console.log(`   Todos: ${room.todos ? room.todos.length : 'undefined'}`);
+          console.log(`   Created: ${room.createdAt}`);
+          console.log('   ---');
         });
+        
+        // Check Room ID format
+        console.log('🔍 Room ID Format Analysis:');
+        allRooms.forEach(room => {
+          const id = room.roomId;
+          console.log(`- "${id}": Length=${id.length}, Format=${/^[A-Z]{5}$/.test(id) ? 'Valid 5-letter' : 'Invalid format'}`);
+        });
+      } else {
+        console.log('❌ No rooms found in storage');
       }
       
       return allRooms;
     }
 
-    // Add this to global scope for debugging
+    // Test Room ID generation
+    function testRoomIdGeneration() {
+      console.log('🧪 Testing Room ID Generation:');
+      for (let i = 0; i < 5; i++) {
+        const id = generateRoomId();
+        console.log(`${i + 1}. Generated: "${id}" (Length: ${id.length}, Valid: ${/^[A-Z]{5}$/.test(id)})`);
+      }
+    }
+
+    // Add both functions to global scope for debugging
     window.debugRoomStorage = debugRoomStorage;
+    window.testRoomIdGeneration = testRoomIdGeneration;
+
+    // Quick fix button for testing
+    function addDebugButton() {
+      if (document.getElementById('debugBtn')) return;
+      
+      const btn = document.createElement('button');
+      btn.id = 'debugBtn';
+      btn.innerHTML = '🔧 Debug';
+      btn.style.cssText = 'position:fixed; top:10px; left:10px; z-index:10000; padding:10px; background:red; color:white; border:none; border-radius:5px; cursor:pointer;';
+      btn.onclick = () => {
+        console.clear();
+        debugRoomStorage();
+        testRoomIdGeneration();
+      };
+      document.body.appendChild(btn);
+    }
+    
+    // Add debug button after page load
+    setTimeout(addDebugButton, 1000);
 
     // Storage Functions
     function generateRoomId() {
